@@ -8,6 +8,7 @@
 
 - Quit with `q` or `Ctrl-Q`.
 - Press `r` to rotate 90 degrees.
+- Press `p` to toggle protractor mode.
 - Click to drag.
 
 ## build

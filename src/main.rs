@@ -22,6 +22,7 @@
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use gtk::{AboutDialog, DrawingArea};
+use std::f64::consts::{FRAC_PI_2, PI};
 use std::sync::{Arc, Mutex};
 
 use gtk::cairo::{Context, FontSlant, FontWeight};
@@ -34,6 +35,7 @@ struct Rlr {
     width: i32,
     height: i32,
     rotate: bool,
+    protractor: bool,
 }
 
 impl Default for Rlr {
@@ -45,112 +47,220 @@ impl Default for Rlr {
             width: 500,
             height: 35,
             rotate: false,
+            protractor: false,
         }
     }
 }
 
 fn draw_rlr(rlr: Arc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> Inhibit {
     let lck = rlr.lock().unwrap();
-    let position = lck.position;
-    /*
-    let root_window = drar
-        .display()
-        .device_manager()
-        .unwrap()
-        .client_pointer()
-        .unwrap()
-        .position();
-    std::dbg!(root_window);
-    */
-    let mut length: f64 = drar.allocated_width() as f64;
-    let _height: f64 = drar.allocated_height() as f64;
-    let mut breadth = lck.breadth;
+    if lck.protractor {
+        return lck.draw_douglas(drar, cr);
+    }
+    lck.draw_rlr(drar, cr)
+}
 
-    if lck.rotate {
-        std::mem::swap(&mut breadth, &mut length);
+impl Rlr {
+    fn resize(&self, window: &gtk::ApplicationWindow) {
+        if self.protractor {
+            window.resize(self.width as i32, self.width as i32);
+        } else {
+            if self.rotate {
+                window.resize(self.height as i32, self.width as i32);
+            } else {
+                window.resize(self.width as i32, self.height as i32);
+            }
+        }
     }
 
-    //println!("Extents: {:?}", cr.fill_extents());
+    fn draw_douglas(&self, _drar: &DrawingArea, cr: &Context) -> Inhibit {
+        let length: f64 = self.width as f64;
+        let root_position = self.root_position;
+        let root_position = (
+            root_position.0 as f64 - length / 2.,
+            -1. * (root_position.1 as f64 - length / 2.),
+        );
+        let (xr, yr) = root_position;
+        let angle = if yr.abs() == 0. {
+            if xr >= 0. {
+                0.
+            } else {
+                PI
+            }
+        } else {
+            2. * f64::atan(yr / (xr + (xr * xr + yr * yr).sqrt()))
+        };
+        cr.set_source_rgb(1., 1.0, 1.0);
+        cr.paint().expect("Invalid cairo surface state");
 
-    //cr.scale(500f64, 40f64);
+        let _pixels_per_tick = 10;
+        let tick_size = 5.;
+        cr.set_source_rgb(0.1, 0.1, 0.1);
+        cr.set_line_width(1.);
 
-    //cr.set_source_rgb(250.0 / 255.0, 224.0 / 255.0, 55.0 / 255.0);
-    cr.set_source_rgb(1., 1.0, 1.0);
-    cr.paint().expect("Invalid cairo surface state");
+        cr.rectangle(0.5, 0.5, length - 1.0, length - 1.0);
+        cr.stroke().expect("Invalid cairo surface state");
 
-    let _pixels_per_tick = 10;
-    let tick_size = 5.;
-    let mut i = 0;
-    let mut x: f64;
-    cr.set_source_rgb(0.1, 0.1, 0.1);
-    cr.set_line_width(1.);
-    if lck.rotate {
-        while i < lck.width {
-            x = (i as f64).floor() + 0.5;
+        for i in 1..(length / 2.).floor() as i64 {
+            let r = (i as f64) * tick_size * 10.;
+            cr.arc(length / 2., length / 2., r, 0., 2. * std::f64::consts::PI);
+            cr.stroke().expect("Invalid cairo surface state");
+            if 2. * r >= length {
+                break;
+            }
+        }
+
+        let mut a = 0.;
+        while a <= (2. * PI) {
+            let tick_size = if (a.abs() * (180. / PI)) % 30. <= 0.55 {
+                5.0 * tick_size
+            } else if (a.abs() * (180. / PI)) % 5. <= 0.5 {
+                1.5 * tick_size
+            } else {
+                tick_size
+            };
+            cr.save().unwrap();
+            cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
+            cr.rotate(2. * PI - a - FRAC_PI_2);
+            let cur = cr.current_point().unwrap();
+            cr.move_to(cur.0 + length / 2. - 0.5 - tick_size, cur.1);
+            cr.line_to(cur.0 + length / 2. - 0.5, cur.1); //.+(xr*xr+yr*yr).sqrt());
+            cr.stroke().expect("Invalid cairo surface state");
+            cr.restore().unwrap();
+            a += 0.01;
+        }
+
+        cr.save().unwrap();
+        cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
+        cr.rotate(2. * PI - FRAC_PI_2);
+        let cur = cr.current_point().unwrap();
+        cr.line_to(cur.0, cur.1 + length / 2. - 0.5); //.+(xr*xr+yr*yr).sqrt());
+        cr.stroke().expect("Invalid cairo surface state");
+        cr.restore().unwrap();
+
+        cr.save().unwrap();
+        let _angle = angle + FRAC_PI_2;
+        cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
+        cr.rotate(2. * PI - _angle);
+        let cur = cr.current_point().unwrap();
+        cr.arc(cur.0, cur.1, 2., 0., 2. * std::f64::consts::PI);
+        cr.stroke().expect("Invalid cairo surface state");
+        cr.move_to(cur.0, cur.1);
+        cr.line_to(cur.0, cur.1 + length / 2. - 0.5); //.+(xr*xr+yr*yr).sqrt());
+        cr.stroke().expect("Invalid cairo surface state");
+        cr.restore().unwrap();
+        cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
+        //cr.set_font_size(0.35);
+
+        cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
+        cr.show_text(&format!(" {:.2}rad {:.2}°", angle, angle * (180. / PI)))
+            .expect("Invalid cairo surface state");
+
+        Inhibit(false)
+    }
+
+    fn draw_rlr(&self, drar: &DrawingArea, cr: &Context) -> Inhibit {
+        let position = self.position;
+        /*
+        let root_window = drar
+            .display()
+            .device_manager()
+            .unwrap()
+            .client_pointer()
+            .unwrap()
+            .position();
+        std::dbg!(root_window);
+        */
+        let mut length: f64 = drar.allocated_width() as f64;
+        let _height: f64 = drar.allocated_height() as f64;
+        let mut breadth = self.breadth;
+
+        if self.rotate {
+            std::mem::swap(&mut breadth, &mut length);
+        }
+
+        //println!("Extents: {:?}", cr.fill_extents());
+
+        //cr.scale(500f64, 40f64);
+
+        //cr.set_source_rgb(250.0 / 255.0, 224.0 / 255.0, 55.0 / 255.0);
+        cr.set_source_rgb(1., 1.0, 1.0);
+        cr.paint().expect("Invalid cairo surface state");
+
+        let _pixels_per_tick = 10;
+        let tick_size = 5.;
+        let mut i = 0;
+        let mut x: f64;
+        cr.set_source_rgb(0.1, 0.1, 0.1);
+        cr.set_line_width(1.);
+        if self.rotate {
+            while i < self.width {
+                x = (i as f64).floor() + 0.5;
+                cr.move_to(1.0, x);
+                let tick_size = if i % 50 == 0 {
+                    tick_size * 1.5
+                } else if i % 10 == 0 {
+                    tick_size
+                } else {
+                    tick_size * 0.5
+                };
+                cr.line_to(tick_size, x);
+                cr.stroke().expect("Invalid cairo surface state");
+                cr.move_to(breadth - tick_size, x);
+                cr.line_to(breadth - 1.0, x);
+                cr.stroke().expect("Invalid cairo surface state");
+                i += 2;
+            }
+            let x = position.1.floor() + 0.5;
             cr.move_to(1.0, x);
-            let tick_size = if i % 50 == 0 {
-                tick_size * 1.5
-            } else if i % 10 == 0 {
-                tick_size
-            } else {
-                tick_size * 0.5
-            };
-            cr.line_to(tick_size, x);
+            cr.line_to(breadth, x);
             cr.stroke().expect("Invalid cairo surface state");
-            cr.move_to(breadth - tick_size, x);
-            cr.line_to(breadth - 1.0, x);
+
+            cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
+            //cr.set_font_size(0.35);
+
+            cr.move_to(breadth / 4., x);
+            cr.show_text(&format!("{}px", position.1.floor()))
+                .expect("Invalid cairo surface state");
+
+            cr.rectangle(0.5, 0.5, self.height as f64 - 1.0, self.width as f64 - 1.0);
             cr.stroke().expect("Invalid cairo surface state");
-            i += 2;
-        }
-        let x = position.1.floor() + 0.5;
-        cr.move_to(1.0, x);
-        cr.line_to(breadth, x);
-        cr.stroke().expect("Invalid cairo surface state");
-
-        cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
-        //cr.set_font_size(0.35);
-
-        cr.move_to(breadth / 4., x);
-        cr.show_text(&format!("{}px", position.1.floor()))
-            .expect("Invalid cairo surface state");
-
-        cr.rectangle(0.5, 0.5, lck.height as f64 - 1.0, lck.width as f64 - 1.0);
-        cr.stroke().expect("Invalid cairo surface state");
-    } else {
-        while i < lck.width {
-            x = (i as f64).floor() + 0.5;
+        } else {
+            while i < self.width {
+                x = (i as f64).floor() + 0.5;
+                cr.move_to(x, 1.0);
+                let tick_size = if i % 50 == 0 {
+                    tick_size * 1.5
+                } else if i % 10 == 0 {
+                    tick_size
+                } else {
+                    tick_size * 0.5
+                };
+                cr.line_to(x, tick_size);
+                cr.stroke().expect("Invalid cairo surface state");
+                cr.move_to(x, breadth - tick_size);
+                cr.line_to(x, breadth - 1.0);
+                cr.stroke().expect("Invalid cairo surface state");
+                i += 2;
+            }
+            let x = position.0.floor() + 0.5;
             cr.move_to(x, 1.0);
-            let tick_size = if i % 50 == 0 {
-                tick_size * 1.5
-            } else if i % 10 == 0 {
-                tick_size
-            } else {
-                tick_size * 0.5
-            };
-            cr.line_to(x, tick_size);
+            cr.line_to(x, breadth);
             cr.stroke().expect("Invalid cairo surface state");
-            cr.move_to(x, breadth - tick_size);
-            cr.line_to(x, breadth - 1.0);
+
+            cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
+            //cr.set_font_size(0.35);
+
+            cr.move_to(x, breadth / 2.);
+            cr.show_text(&format!("{}px", position.0.floor()))
+                .expect("Invalid cairo surface state");
+
+            cr.rectangle(0.5, 0.5, length - 1.0, breadth - 1.0);
             cr.stroke().expect("Invalid cairo surface state");
-            i += 2;
         }
-        let x = position.0.floor() + 0.5;
-        cr.move_to(x, 1.0);
-        cr.line_to(x, breadth);
-        cr.stroke().expect("Invalid cairo surface state");
 
-        cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
-        //cr.set_font_size(0.35);
-
-        cr.move_to(x, breadth / 2.);
-        cr.show_text(&format!("{}px", position.0.floor()))
-            .expect("Invalid cairo surface state");
-
-        cr.rectangle(0.5, 0.5, length - 1.0, breadth - 1.0);
-        cr.stroke().expect("Invalid cairo surface state");
+        Inhibit(false)
     }
-
-    Inhibit(false)
 }
 
 fn main() {
@@ -165,6 +275,7 @@ fn main() {
         application.set_accels_for_action("app.quit", &["<Primary>Q"]);
         application.set_accels_for_action("app.quit", &["Q"]);
         application.set_accels_for_action("app.rotate", &["R"]);
+        application.set_accels_for_action("app.protractor", &["P"]);
         //application.set_accels_for_action("app.about", &["<Primary>A"]);
     });
     application.connect_activate(move |application: &gtk::Application| {
@@ -223,7 +334,12 @@ fn drawable<F>(
                 let root_position = (x - root_origin.0, y - root_origin.1);
 
                 if root_position != lck.root_position {
-                    if lck.rotate && root_position.1 < lck.width && root_position.1 > 0 {
+                    if lck.protractor {
+                        lck.root_position = root_position;
+                        lck.position.0 = root_position.0 as f64;
+                        lck.position.1 = root_position.1 as f64;
+                        window.queue_draw();
+                    } else if lck.rotate && root_position.1 < lck.width && root_position.1 > 0 {
                         lck.root_position = root_position;
                         lck.position.1 = root_position.1 as f64;
                         window.queue_draw();
@@ -279,8 +395,8 @@ fn drawable<F>(
     window.set_app_paintable(true); // crucial for transparency
                                     //window.set_resizable(true);
     window.set_decorated(false);
-    #[cfg(debug_assertions)]
-    gtk::Window::set_interactive_debugging(true);
+    //#[cfg(debug_assertions)]
+    //gtk::Window::set_interactive_debugging(true);
 
     let drawing_area = Box::new(DrawingArea::new)();
 
@@ -363,15 +479,22 @@ fn add_actions(
     rlr: Arc<Mutex<Rlr>>,
 ) {
     let rotate = gio::SimpleAction::new("rotate", None);
+    let _rlr = rlr.clone();
     rotate.connect_activate(glib::clone!(@weak window => move |_, _| {
         {
-            let mut lck = rlr.lock().unwrap();
+            let mut lck = _rlr.lock().unwrap();
             lck.rotate = !lck.rotate;
-            if lck.rotate {
-                window.resize(lck.height as i32, lck.width as i32);
-            } else {
-                window.resize(lck.width as i32, lck.height as i32);
-            }
+            lck.resize(&window);
+        }
+        window.queue_draw();
+    }));
+
+    let protractor = gio::SimpleAction::new("protractor", None);
+    protractor.connect_activate(glib::clone!(@weak window => move |_, _| {
+        {
+            let mut lck = rlr.lock().unwrap();
+            lck.protractor = !lck.protractor;
+            lck.resize(&window);
         }
         window.queue_draw();
     }));
@@ -393,6 +516,7 @@ fn add_actions(
     }));
 
     // We need to add all the actions to the application so they can be taken into account.
+    application.add_action(&protractor);
     application.add_action(&rotate);
     application.add_action(&about);
     application.add_action(&quit);
