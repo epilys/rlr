@@ -33,6 +33,7 @@ struct Rlr {
     breadth: f64,
     width: i32,
     height: i32,
+    rotate: bool,
 }
 
 impl Default for Rlr {
@@ -43,6 +44,7 @@ impl Default for Rlr {
             breadth: 35.,
             width: 500,
             height: 35,
+            rotate: false,
         }
     }
 }
@@ -60,8 +62,13 @@ fn draw_rlr(rlr: Arc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> Inhibit {
         .position();
     std::dbg!(root_window);
     */
-    let length: f64 = drar.allocated_width() as f64;
+    let mut length: f64 = drar.allocated_width() as f64;
     let _height: f64 = drar.allocated_height() as f64;
+    let mut breadth = lck.breadth;
+
+    if lck.rotate {
+        std::mem::swap(&mut breadth, &mut length);
+    }
 
     //println!("Extents: {:?}", cr.fill_extents());
 
@@ -75,41 +82,74 @@ fn draw_rlr(rlr: Arc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> Inhibit {
     let tick_size = 5.;
     let mut i = 0;
     let mut x: f64;
-    let breadth = lck.breadth;
     cr.set_source_rgb(0.1, 0.1, 0.1);
     cr.set_line_width(1.);
-    while i < lck.width {
-        x = (i as f64).floor() + 0.5;
+    if lck.rotate {
+        while i < lck.width {
+            x = (i as f64).floor() + 0.5;
+            cr.move_to(1.0, x);
+            let tick_size = if i % 50 == 0 {
+                tick_size * 1.5
+            } else if i % 10 == 0 {
+                tick_size
+            } else {
+                tick_size * 0.5
+            };
+            cr.line_to(tick_size, x);
+            cr.stroke().expect("Invalid cairo surface state");
+            cr.move_to(breadth - tick_size, x);
+            cr.line_to(breadth - 1.0, x);
+            cr.stroke().expect("Invalid cairo surface state");
+            i += 2;
+        }
+        let x = position.1.floor() + 0.5;
+        cr.move_to(1.0, x);
+        cr.line_to(breadth, x);
+        cr.stroke().expect("Invalid cairo surface state");
+
+        cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
+        //cr.set_font_size(0.35);
+
+        cr.move_to(breadth / 4., x);
+        cr.show_text(&format!("{}px", position.1.floor()))
+            .expect("Invalid cairo surface state");
+
+        cr.rectangle(0.5, 0.5, lck.height as f64 - 1.0, lck.width as f64 - 1.0);
+        cr.stroke().expect("Invalid cairo surface state");
+    } else {
+        while i < lck.width {
+            x = (i as f64).floor() + 0.5;
+            cr.move_to(x, 1.0);
+            let tick_size = if i % 50 == 0 {
+                tick_size * 1.5
+            } else if i % 10 == 0 {
+                tick_size
+            } else {
+                tick_size * 0.5
+            };
+            cr.line_to(x, tick_size);
+            cr.stroke().expect("Invalid cairo surface state");
+            cr.move_to(x, breadth - tick_size);
+            cr.line_to(x, breadth - 1.0);
+            cr.stroke().expect("Invalid cairo surface state");
+            i += 2;
+        }
+        let x = position.0.floor() + 0.5;
         cr.move_to(x, 1.0);
-        let tick_size = if i % 50 == 0 {
-            tick_size * 1.5
-        } else if i % 10 == 0 {
-            tick_size
-        } else {
-            tick_size * 0.5
-        };
-        cr.line_to(x, tick_size);
+        cr.line_to(x, breadth);
         cr.stroke().expect("Invalid cairo surface state");
-        cr.move_to(x, breadth - tick_size);
-        cr.line_to(x, breadth - 1.0);
+
+        cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
+        //cr.set_font_size(0.35);
+
+        cr.move_to(x, breadth / 2.);
+        cr.show_text(&format!("{}px", position.0.floor()))
+            .expect("Invalid cairo surface state");
+
+        cr.rectangle(0.5, 0.5, length - 1.0, breadth - 1.0);
         cr.stroke().expect("Invalid cairo surface state");
-        i += 2;
     }
 
-    let x = position.0.floor() + 0.5;
-    cr.move_to(x, 1.0);
-    cr.line_to(x, breadth);
-    cr.stroke().expect("Invalid cairo surface state");
-
-    cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
-    //cr.set_font_size(0.35);
-
-    cr.move_to(x, breadth / 2.);
-    cr.show_text(&format!("{}px", position.0.floor()))
-        .expect("Invalid cairo surface state");
-
-    cr.rectangle(0.5, 0.5, length - 1.0, breadth - 1.0);
-    cr.stroke().expect("Invalid cairo surface state");
     Inhibit(false)
 }
 
@@ -124,6 +164,7 @@ fn main() {
     application.connect_startup(|application: &gtk::Application| {
         application.set_accels_for_action("app.quit", &["<Primary>Q"]);
         application.set_accels_for_action("app.quit", &["Q"]);
+        application.set_accels_for_action("app.rotate", &["R"]);
         //application.set_accels_for_action("app.about", &["<Primary>A"]);
     });
     application.connect_activate(move |application: &gtk::Application| {
@@ -180,13 +221,17 @@ fn drawable<F>(
                     .unwrap()
                     .position();
                 let root_position = (x - root_origin.0, y - root_origin.1);
-                if root_position != lck.root_position
-                    && root_position.0 < lck.width
-                    && root_position.0 > 0
-                {
-                    lck.root_position = root_position;
-                    lck.position.0 = root_position.0 as f64;
-                    window.queue_draw();
+
+                if root_position != lck.root_position {
+                    if lck.rotate && root_position.1 < lck.width && root_position.1 > 0 {
+                        lck.root_position = root_position;
+                        lck.position.1 = root_position.1 as f64;
+                        window.queue_draw();
+                    } else if !lck.rotate && root_position.0 < lck.width && root_position.0 > 0 {
+                        lck.root_position = root_position;
+                        lck.position.0 = root_position.0 as f64;
+                        window.queue_draw();
+                    }
                 }
             }
             // we could return glib::Continue(false) to stop our clock after this tick
@@ -194,7 +239,7 @@ fn drawable<F>(
         };
 
         // executes the closure once every second
-        glib::timeout_add_local(std::time::Duration::from_millis(80), tick);
+        glib::timeout_add_local(std::time::Duration::from_millis(10), tick);
     }
 
     window.connect_enter_notify_event(enter_notify);
@@ -221,9 +266,10 @@ fn drawable<F>(
             Inhibit(false)
         },
     );
+    let _rlr = rlr.clone();
     window.connect_motion_notify_event(
         move |window: &gtk::ApplicationWindow, motion: &gdk::EventMotion| -> Inhibit {
-            let rlr = rlr.clone();
+            let rlr = _rlr.clone();
             let mut lck = rlr.lock().unwrap();
             lck.position = motion.position();
             window.queue_draw();
@@ -247,7 +293,7 @@ fn drawable<F>(
 
     build_system_menu(application);
 
-    add_actions(application, &window);
+    add_actions(application, &window, rlr);
 
     window.show_all();
 }
@@ -311,7 +357,25 @@ fn build_system_menu(_application: &gtk::Application) {
 }
 
 /// This function creates "actions" which connect on the declared actions from the menu items.
-fn add_actions(application: &gtk::Application, window: &gtk::ApplicationWindow) {
+fn add_actions(
+    application: &gtk::Application,
+    window: &gtk::ApplicationWindow,
+    rlr: Arc<Mutex<Rlr>>,
+) {
+    let rotate = gio::SimpleAction::new("rotate", None);
+    rotate.connect_activate(glib::clone!(@weak window => move |_, _| {
+        {
+            let mut lck = rlr.lock().unwrap();
+            lck.rotate = !lck.rotate;
+            if lck.rotate {
+                window.resize(lck.height as i32, lck.width as i32);
+            } else {
+                window.resize(lck.width as i32, lck.height as i32);
+            }
+        }
+        window.queue_draw();
+    }));
+
     let quit = gio::SimpleAction::new("quit", None);
     quit.connect_activate(glib::clone!(@weak window => move |_, _| {
         window.close();
@@ -329,6 +393,7 @@ fn add_actions(application: &gtk::Application, window: &gtk::ApplicationWindow) 
     }));
 
     // We need to add all the actions to the application so they can be taken into account.
+    application.add_action(&rotate);
     application.add_action(&about);
     application.add_action(&quit);
 }
