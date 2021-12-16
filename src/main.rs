@@ -92,8 +92,15 @@ impl Rlr {
         } else {
             2. * f64::atan(yr / (xr + (xr * xr + yr * yr).sqrt()))
         };
+        cr.arc(
+            length / 2.,
+            length / 2.,
+            length / 2.,
+            0.,
+            2. * std::f64::consts::PI,
+        );
         cr.set_source_rgb(1., 1.0, 1.0);
-        cr.paint().expect("Invalid cairo surface state");
+        cr.fill().expect("Invalid cairo surface state");
 
         let _pixels_per_tick = 10;
         let tick_size = 5.;
