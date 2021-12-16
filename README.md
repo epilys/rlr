@@ -7,9 +7,10 @@
 ## use
 
 - Quit with `q` or `Ctrl-Q`.
+- Click to drag.
 - Press `r` to rotate 90 degrees.
 - Press `p` to toggle protractor mode.
-- Click to drag.
+- Press `Control_L` continuously to disable precision (measurements will snap to nearest integer).
 
 ## build
 

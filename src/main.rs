@@ -36,6 +36,7 @@ struct Rlr {
     height: i32,
     rotate: bool,
     protractor: bool,
+    precision: bool,
 }
 
 impl Default for Rlr {
@@ -48,6 +49,7 @@ impl Default for Rlr {
             height: 35,
             rotate: false,
             protractor: false,
+            precision: true,
         }
     }
 }
@@ -139,7 +141,11 @@ impl Rlr {
         cr.restore().unwrap();
 
         cr.save().unwrap();
-        let _angle = angle + FRAC_PI_2;
+        let _angle = if self.precision {
+            angle + FRAC_PI_2
+        } else {
+            angle.round() + FRAC_PI_2
+        };
         cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
         cr.rotate(2. * PI - _angle);
         let cur = cr.current_point().unwrap();
@@ -153,8 +159,12 @@ impl Rlr {
         //cr.set_font_size(0.35);
 
         cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
-        cr.show_text(&format!(" {:.2}rad {:.2}°", angle, angle * (180. / PI)))
-            .expect("Invalid cairo surface state");
+        cr.show_text(&format!(
+            " {:.2}rad {:.2}°",
+            if self.precision { angle } else { angle.round() },
+            if self.precision { angle } else { angle.round() } * (180. / PI)
+        ))
+        .expect("Invalid cairo surface state");
 
         Inhibit(false)
     }
@@ -211,7 +221,12 @@ impl Rlr {
                 cr.stroke().expect("Invalid cairo surface state");
                 i += 2;
             }
-            let x = position.1.floor() + 0.5;
+            let pos = if self.precision {
+                position.1.floor()
+            } else {
+                (position.1 / 10.).floor() * 10.
+            };
+            let x = pos + 0.5;
             cr.move_to(1.0, x);
             cr.line_to(breadth, x);
             cr.stroke().expect("Invalid cairo surface state");
@@ -220,7 +235,7 @@ impl Rlr {
             //cr.set_font_size(0.35);
 
             cr.move_to(breadth / 4., x);
-            cr.show_text(&format!("{}px", position.1.floor()))
+            cr.show_text(&format!("{}px", pos))
                 .expect("Invalid cairo surface state");
 
             cr.rectangle(0.5, 0.5, self.height as f64 - 1.0, self.width as f64 - 1.0);
@@ -243,7 +258,12 @@ impl Rlr {
                 cr.stroke().expect("Invalid cairo surface state");
                 i += 2;
             }
-            let x = position.0.floor() + 0.5;
+            let pos = if self.precision {
+                position.0.floor()
+            } else {
+                (position.0 / 10.).floor() * 10.
+            };
+            let x = pos + 0.5;
             cr.move_to(x, 1.0);
             cr.line_to(x, breadth);
             cr.stroke().expect("Invalid cairo surface state");
@@ -252,7 +272,7 @@ impl Rlr {
             //cr.set_font_size(0.35);
 
             cr.move_to(x, breadth / 2.);
-            cr.show_text(&format!("{}px", position.0.floor()))
+            cr.show_text(&format!("{}px", pos))
                 .expect("Invalid cairo surface state");
 
             cr.rectangle(0.5, 0.5, length - 1.0, breadth - 1.0);
@@ -379,6 +399,42 @@ fn drawable<F>(
         move |_application: &gtk::ApplicationWindow, _ev: &gtk::gdk::EventButton| -> Inhibit {
             //let rlr = _rlr.clone();
             //println!("drag end");
+            Inhibit(false)
+        },
+    );
+    let _rlr = rlr.clone();
+    window.connect_key_press_event(
+        move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| -> Inhibit {
+            //println!("press {}", ev.keyval().name().unwrap().as_str());
+            if ev
+                .keyval()
+                .name()
+                .map(|n| n.as_str() == "Control_L")
+                .unwrap_or(false)
+            {
+                let rlr = _rlr.clone();
+                let mut lck = rlr.lock().unwrap();
+                lck.precision = false;
+                window.queue_draw();
+            }
+            Inhibit(false)
+        },
+    );
+    let _rlr = rlr.clone();
+    window.connect_key_release_event(
+        move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| -> Inhibit {
+            //println!("release {}", ev.keyval().name().unwrap().as_str());
+            if ev
+                .keyval()
+                .name()
+                .map(|n| n.as_str() == "Control_L")
+                .unwrap_or(false)
+            {
+                let rlr = _rlr.clone();
+                let mut lck = rlr.lock().unwrap();
+                lck.precision = true;
+                window.queue_draw();
+            }
             Inhibit(false)
         },
     );
