@@ -115,8 +115,8 @@ impl Rlr {
         cr.set_source_rgb(0.1, 0.1, 0.1);
         cr.set_line_width(1.);
 
-        cr.rectangle(0.5, 0.5, length - 1.0, length - 1.0);
-        cr.stroke().expect("Invalid cairo surface state");
+        //cr.rectangle(0.5, 0.5, length - 1.0, length - 1.0);
+        //cr.stroke().expect("Invalid cairo surface state");
 
         for i in 1..(length / 2.).floor() as i64 {
             let r = (i as f64) * tick_size * 10.;
