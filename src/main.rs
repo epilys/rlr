@@ -37,6 +37,8 @@ struct Rlr {
     rotate: bool,
     protractor: bool,
     precision: bool,
+    edit_angle_offset: bool,
+    angle_offset: f64,
 }
 
 impl Default for Rlr {
@@ -50,6 +52,8 @@ impl Default for Rlr {
             rotate: false,
             protractor: false,
             precision: true,
+            edit_angle_offset: false,
+            angle_offset: 0.,
         }
     }
 }
@@ -75,6 +79,18 @@ impl Rlr {
         }
     }
 
+    fn calc_angle_of_point(&self, (xr, yr): (f64, f64)) -> f64 {
+        if yr.abs() == 0. {
+            if xr >= 0. {
+                0.
+            } else {
+                PI
+            }
+        } else {
+            2. * f64::atan(yr / (xr + (xr * xr + yr * yr).sqrt()))
+        }
+    }
+
     fn draw_douglas(&self, _drar: &DrawingArea, cr: &Context) -> Inhibit {
         let length: f64 = self.width as f64;
         let root_position = self.root_position;
@@ -83,15 +99,7 @@ impl Rlr {
             -1. * (root_position.1 as f64 - length / 2.),
         );
         let (xr, yr) = root_position;
-        let angle = if yr.abs() == 0. {
-            if xr >= 0. {
-                0.
-            } else {
-                PI
-            }
-        } else {
-            2. * f64::atan(yr / (xr + (xr * xr + yr * yr).sqrt()))
-        };
+        let angle = self.calc_angle_of_point((xr, yr));
         cr.arc(
             length / 2.,
             length / 2.,
@@ -140,8 +148,9 @@ impl Rlr {
         }
 
         cr.save().unwrap();
+        cr.set_line_width(2.);
         cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
-        cr.rotate(2. * PI - FRAC_PI_2);
+        cr.rotate(2. * PI - FRAC_PI_2 - self.angle_offset);
         let cur = cr.current_point().unwrap();
         cr.line_to(cur.0, cur.1 + length / 2. - 0.5); //.+(xr*xr+yr*yr).sqrt());
         cr.stroke().expect("Invalid cairo surface state");
@@ -168,8 +177,16 @@ impl Rlr {
         cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
         cr.show_text(&format!(
             " {:.2}rad {:.2}°",
-            if self.precision { angle } else { angle.round() },
-            if self.precision { angle } else { angle.round() } * (180. / PI)
+            if self.precision {
+                angle - self.angle_offset
+            } else {
+                angle.round() - self.angle_offset
+            },
+            if self.precision {
+                angle - self.angle_offset
+            } else {
+                angle.round() - self.angle_offset
+            } * (180. / PI)
         ))
         .expect("Invalid cairo surface state");
 
@@ -349,6 +366,9 @@ fn drawable<F>(
         let window = window.clone();
         let tick = move || {
             let mut lck = rlr.lock().unwrap();
+            if lck.edit_angle_offset {
+                return glib::Continue(true);
+            }
             if let Some(screen) = window.window() {
                 let root_origin = screen.root_origin();
                 let display = screen.display();
@@ -387,25 +407,35 @@ fn drawable<F>(
 
     window.connect_enter_notify_event(enter_notify);
     window.connect_leave_notify_event(leave_notify);
-    //let _rlr = rlr.clone();
+    let _rlr = rlr.clone();
     window.connect_button_press_event(
         move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventButton| -> Inhibit {
-            //let rlr = _rlr.clone();
+            let rlr = _rlr.clone();
+            let mut lck = rlr.lock().unwrap();
             //println!("drag begin");
-            window.begin_move_drag(
-                ev.button() as _,
-                ev.root().0 as _,
-                ev.root().1 as _,
-                ev.time(),
-            );
+
+            if ev.button() == 1 && !lck.precision {
+                lck.edit_angle_offset = true;
+            } else {
+                window.begin_move_drag(
+                    ev.button() as _,
+                    ev.root().0 as _,
+                    ev.root().1 as _,
+                    ev.time(),
+                );
+            }
             Inhibit(false)
         },
     );
     let _rlr = rlr.clone();
     window.connect_button_release_event(
-        move |_application: &gtk::ApplicationWindow, _ev: &gtk::gdk::EventButton| -> Inhibit {
-            //let rlr = _rlr.clone();
+        move |_application: &gtk::ApplicationWindow, ev: &gtk::gdk::EventButton| -> Inhibit {
+            let rlr = _rlr.clone();
+            let mut lck = rlr.lock().unwrap();
             //println!("drag end");
+            if ev.button() == 1 {
+                lck.edit_angle_offset = false;
+            }
             Inhibit(false)
         },
     );
@@ -451,6 +481,12 @@ fn drawable<F>(
             let rlr = _rlr.clone();
             let mut lck = rlr.lock().unwrap();
             lck.position = motion.position();
+            if lck.edit_angle_offset {
+                let (xr, yr) = lck.position;
+                let translated_position = (xr - lck.width as f64 / 2., lck.width as f64 / 2. - yr);
+                let angle = lck.calc_angle_of_point(translated_position);
+                lck.angle_offset = angle; // + FRAC_PI_2;
+            }
             window.queue_draw();
             Inhibit(false)
         },
