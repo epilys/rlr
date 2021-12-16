@@ -34,6 +34,7 @@ struct Rlr {
     breadth: f64,
     width: i32,
     height: i32,
+    freeze: bool,
     rotate: bool,
     protractor: bool,
     precision: bool,
@@ -49,6 +50,7 @@ impl Default for Rlr {
             breadth: 35.,
             width: 500,
             height: 35,
+            freeze: false,
             rotate: false,
             protractor: false,
             precision: true,
@@ -322,10 +324,10 @@ fn main() {
     let rlr = Arc::new(Mutex::new(Rlr::default()));
 
     application.connect_startup(|application: &gtk::Application| {
-        application.set_accels_for_action("app.quit", &["<Primary>Q"]);
-        application.set_accels_for_action("app.quit", &["Q"]);
+        application.set_accels_for_action("app.quit", &["<Primary>Q", "Q"]);
         application.set_accels_for_action("app.rotate", &["R"]);
         application.set_accels_for_action("app.protractor", &["P"]);
+        application.set_accels_for_action("app.freeze", &["F", "space"]);
         //application.set_accels_for_action("app.about", &["<Primary>A"]);
     });
     application.connect_activate(move |application: &gtk::Application| {
@@ -372,7 +374,7 @@ fn drawable<F>(
         let window = window.clone();
         let tick = move || {
             let mut lck = rlr.lock().unwrap();
-            if lck.edit_angle_offset {
+            if lck.edit_angle_offset || lck.freeze {
                 return glib::Continue(true);
             }
             if let Some(screen) = window.window() {
@@ -583,6 +585,16 @@ fn add_actions(
     window: &gtk::ApplicationWindow,
     rlr: Arc<Mutex<Rlr>>,
 ) {
+    let freeze = gio::SimpleAction::new("freeze", None);
+    let _rlr = rlr.clone();
+    freeze.connect_activate(glib::clone!(@weak window => move |_, _| {
+        {
+            let mut lck = _rlr.lock().unwrap();
+            lck.freeze = !lck.freeze;
+        }
+        window.queue_draw();
+    }));
+
     let rotate = gio::SimpleAction::new("rotate", None);
     let _rlr = rlr.clone();
     rotate.connect_activate(glib::clone!(@weak window => move |_, _| {
@@ -621,6 +633,7 @@ fn add_actions(
     }));
 
     // We need to add all the actions to the application so they can be taken into account.
+    application.add_action(&freeze);
     application.add_action(&protractor);
     application.add_action(&rotate);
     application.add_action(&about);
