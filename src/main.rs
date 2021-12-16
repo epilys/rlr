@@ -175,18 +175,24 @@ impl Rlr {
         //cr.set_font_size(0.35);
 
         cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
+        let angle = if root_position.1 < 0. {
+            (PI - angle.abs()) + PI - self.angle_offset
+        } else {
+            angle - self.angle_offset
+        };
+        cr.arc(
+            length / 2.,
+            length / 2.,
+            17.,
+            2. * PI - _angle + FRAC_PI_2,
+            2. * PI - self.angle_offset,
+        );
+        cr.stroke().expect("Invalid cairo surface state");
+        cr.move_to(length / 2. - 5.5, length / 2. - 15.5);
         cr.show_text(&format!(
             " {:.2}rad {:.2}°",
-            if self.precision {
-                angle - self.angle_offset
-            } else {
-                angle.round() - self.angle_offset
-            },
-            if self.precision {
-                angle - self.angle_offset
-            } else {
-                angle.round() - self.angle_offset
-            } * (180. / PI)
+            if self.precision { angle } else { angle.round() },
+            if self.precision { angle } else { angle.round() } * (180. / PI)
         ))
         .expect("Invalid cairo surface state");
 
