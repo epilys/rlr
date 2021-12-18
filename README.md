@@ -2,11 +2,24 @@
 
 ![./logo.png](./logo.png)
 
+Rust + GTK interactive pixel screen ruler with protractor mode.
+
+## demo
+
+<table>
+<tr><td colspan=2 align="center"><kbd>
+
 ![./demo.png](./demo.png)
+</kbd></tr><tr><td><kbd>
 
 ![./demo.gif](./demo.gif)
 
-![./demo_protractor.gif](./demo_protractor.gif)
+</kbd></td><td><kbd>
+
+![./demo_move.gif](./demo_move.gif)
+
+</kbd></td></tr></table>
+
 
 ## use
 
