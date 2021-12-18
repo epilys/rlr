@@ -378,6 +378,7 @@ where
         .application(application)
         .events(gdk::EventMask::POINTER_MOTION_MASK)
         .build();
+    window.set_icon(Some(&gtk::gdk_pixbuf::Pixbuf::from_xpm_data(ICON)));
 
     set_visual(&window, None);
 
