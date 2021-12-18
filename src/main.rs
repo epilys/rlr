@@ -27,6 +27,8 @@ use std::sync::{Arc, Mutex};
 
 use gtk::cairo::{Context, FontSlant, FontWeight};
 
+include!("logo.xpm.rs");
+
 #[derive(Debug)]
 struct Rlr {
     position: (f64, f64),
@@ -665,6 +667,9 @@ fn add_actions(
     about.connect_activate(glib::clone!(@weak window => move |_, _| {
         let p = AboutDialog::new();
         p.set_program_name("rlr");
+        p.set_logo(Some(&gtk::gdk_pixbuf::Pixbuf::from_xpm_data(
+     ICON,
+)));
         p.set_website_label(Some("https://github.com/epilys/rlr"));
         p.set_website(Some("https://github.com/epilys/rlr"));
         p.set_authors(&["Manos Pitsidianakis"]);

@@ -1,5 +1,7 @@
 # `rlr`: a pixel screen ruler
 
+![./logo.png](./logo.png)
+
 ![./demo.png](./demo.png)
 
 ![./demo.gif](./demo.gif)
