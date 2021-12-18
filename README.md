@@ -17,6 +17,7 @@
 - Press `Control_L` continuously to disable precision (measurements will snap to nearest integer).
 - Press `+` to increase size.
 - Press `-` to decrease size.
+- Press `Up`, `Down`, `Left`, `Right` to move window position by 10 pixels. Also hold down `Control_L` to move by 1 pixel.
 
 ## build
 

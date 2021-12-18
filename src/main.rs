@@ -346,6 +346,11 @@ fn main() {
         application.set_accels_for_action("app.increase", &["plus"]);
         application.set_accels_for_action("app.decrease", &["minus"]);
         application.set_accels_for_action("app.about", &["question", "F1"]);
+        application.set_accels_for_action("app.move_right", &["Right", "<Primary>Right"]);
+        application.set_accels_for_action("app.move_left", &["Left", "<Primary>Left"]);
+        application.set_accels_for_action("app.move_up", &["Up", "<Primary>Up"]);
+        application.set_accels_for_action("app.move_down", &["Down", "<Primary>Down"]);
+        application.set_accels_for_action("app.move_to_center", &["Home"]);
     });
     application.connect_activate(move |application: &gtk::Application| {
         let _rlr = rlr.clone();
@@ -676,6 +681,7 @@ fn add_actions(
 - Press `Control_L` continuously to disable precision (measurements will snap to nearest integer).
 - Press `+` to increase size.
 - Press `-` to decrease size.
+- Press `Up`, `Down`, `Left`, `Right` to move window position by 10 pixels. Also hold down `Control_L` to move by 1 pixel.
 "));
         p.show_all();
     }));
@@ -723,7 +729,67 @@ fn add_actions(
         }
         window.queue_draw();
     }));
+    let _rlr = rlr.clone();
+    let move_right = gio::SimpleAction::new("move_right", None);
+    move_right.connect_activate(glib::clone!(@weak window => move |_, _| {
+        let rlr = _rlr.clone();
+        let lck = rlr.lock().unwrap();
+        let (mut x, y) = window.position();
+        if !lck.precision {
+            x += 1;
+        } else {
+            x += 10;
+        }
+        window.move_(x, y);
+        window.queue_draw();
+    }));
+    let _rlr = rlr.clone();
+    let move_left = gio::SimpleAction::new("move_left", None);
+    move_left.connect_activate(glib::clone!(@weak window => move |_, _| {
+        let rlr = _rlr.clone();
+        let lck = rlr.lock().unwrap();
+        let (mut x, y) = window.position();
+        if !lck.precision {
+            x -= 1;
+        } else {
+            x -= 10;
+        }
+        window.move_(x, y);
+        window.queue_draw();
+    }));
+    let _rlr = rlr.clone();
+    let move_up = gio::SimpleAction::new("move_up", None);
+    move_up.connect_activate(glib::clone!(@weak window => move |_, _| {
+        let rlr = _rlr.clone();
+        let lck = rlr.lock().unwrap();
+        let (x, mut y) = window.position();
+        if !lck.precision {
+            y -= 1;
+        } else {
+            y -= 10;
+        }
+        window.move_(x, y);
+        window.queue_draw();
+    }));
+    let _rlr = rlr.clone();
+    let move_down = gio::SimpleAction::new("move_down", None);
+    move_down.connect_activate(glib::clone!(@weak window => move |_, _| {
+        let rlr = _rlr.clone();
+        let lck = rlr.lock().unwrap();
+        let (x, mut y) = window.position();
+        if !lck.precision {
+            y += 1;
+        } else {
+            y += 10;
+        }
+        window.move_(x, y);
+        window.queue_draw();
+    }));
     // We need to add all the actions to the application so they can be taken into account.
+    application.add_action(&move_right);
+    application.add_action(&move_left);
+    application.add_action(&move_up);
+    application.add_action(&move_down);
     application.add_action(&increase);
     application.add_action(&decrease);
     application.add_action(&freeze);
