@@ -345,7 +345,7 @@ fn main() {
         application.set_accels_for_action("app.freeze", &["F", "space"]);
         application.set_accels_for_action("app.increase", &["plus"]);
         application.set_accels_for_action("app.decrease", &["minus"]);
-        //application.set_accels_for_action("app.about", &["<Primary>A"]);
+        application.set_accels_for_action("app.about", &["question", "F1"]);
     });
     application.connect_activate(move |application: &gtk::Application| {
         let _rlr = rlr.clone();
@@ -659,11 +659,24 @@ fn add_actions(
     let about = gio::SimpleAction::new("about", None);
     about.connect_activate(glib::clone!(@weak window => move |_, _| {
         let p = AboutDialog::new();
-        p.set_website_label(Some("gtk-rs"));
-        p.set_website(Some("http://gtk-rs.org"));
-        p.set_authors(&["gtk-rs developers"]);
-        p.set_title("About!");
+        p.set_program_name("rlr");
+        p.set_website_label(Some("https://github.com/epilys/rlr"));
+        p.set_website(Some("https://github.com/epilys/rlr"));
+        p.set_authors(&["Manos Pitsidianakis"]);
+        p.set_copyright(Some("2021 - Manos Pitsidianakis"));
+        p.set_title("About rlr");
+        p.set_license_type(gtk::License::Gpl30);
         p.set_transient_for(Some(&window));
+        p.set_comments(Some("- Quit with `q` or `Ctrl-Q`.
+- Click to drag.
+- Press `r` to rotate 90 degrees.
+- Press `p` to toggle protractor mode.
+- Press `f` or `<Space>` to toggle freezing the measurements.
+- Press `Control_L` and drag the angle base side to rotate it in protractor mode.
+- Press `Control_L` continuously to disable precision (measurements will snap to nearest integer).
+- Press `+` to increase size.
+- Press `-` to decrease size.
+"));
         p.show_all();
     }));
 
