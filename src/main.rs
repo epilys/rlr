@@ -248,6 +248,15 @@ impl Rlr {
                 cr.move_to(breadth - tick_size, x);
                 cr.line_to(breadth - 1.0, x);
                 cr.stroke().expect("Invalid cairo surface state");
+                if i % 50 == 0 {
+                    cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
+                    let label = format!("{}", i);
+                    let extents = cr
+                        .text_extents(&label)
+                        .expect("Invalid cairo surface state");
+                    cr.move_to(breadth / 2. - 2.5 - extents.width as f64 / 2., x);
+                    cr.show_text(&label).expect("Invalid cairo surface state");
+                }
                 i += 2;
             }
             let pos = if self.precision {
@@ -285,6 +294,15 @@ impl Rlr {
                 cr.move_to(x, breadth - tick_size);
                 cr.line_to(x, breadth - 1.0);
                 cr.stroke().expect("Invalid cairo surface state");
+                if i % 50 == 0 {
+                    cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
+                    let label = format!("{}", i);
+                    let extents = cr
+                        .text_extents(&label)
+                        .expect("Invalid cairo surface state");
+                    cr.move_to(x - extents.width as f64 / 2., breadth / 2. + 2.5);
+                    cr.show_text(&label).expect("Invalid cairo surface state");
+                }
                 i += 2;
             }
             let pos = if self.precision {
