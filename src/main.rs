@@ -343,6 +343,8 @@ fn main() {
         application.set_accels_for_action("app.rotate", &["R"]);
         application.set_accels_for_action("app.protractor", &["P"]);
         application.set_accels_for_action("app.freeze", &["F", "space"]);
+        application.set_accels_for_action("app.increase", &["plus"]);
+        application.set_accels_for_action("app.decrease", &["minus"]);
         //application.set_accels_for_action("app.about", &["<Primary>A"]);
     });
     application.connect_activate(move |application: &gtk::Application| {
@@ -629,10 +631,11 @@ fn add_actions(
         window.queue_draw();
     }));
 
+    let _rlr = rlr.clone();
     let protractor = gio::SimpleAction::new("protractor", None);
     protractor.connect_activate(glib::clone!(@weak window => move |_, _| {
         {
-            let mut lck = rlr.lock().unwrap();
+            let mut lck = _rlr.lock().unwrap();
             lck.protractor = !lck.protractor;
             if let Some((w, h)) = lck.p_dimens.take() {
                 lck.p_dimens = Some((lck.width,lck.height ));
@@ -664,7 +667,52 @@ fn add_actions(
         p.show_all();
     }));
 
+    let _rlr = rlr.clone();
+    let increase = gio::SimpleAction::new("increase", None);
+    increase.connect_activate(glib::clone!(@weak window => move |_, _| {
+        {
+            let mut lck = _rlr.lock().unwrap();
+            if !lck.protractor {
+                if lck.rotate {
+                    lck.height += 50;
+                } else {
+                    lck.width += 50;
+                }
+                lck.set_size(&window);
+            } else {
+                lck.width += 50;
+                lck.height = lck.width;
+                lck.set_size(&window);
+            }
+        }
+        window.queue_draw();
+    }));
+    let _rlr = rlr.clone();
+    let decrease = gio::SimpleAction::new("decrease", None);
+    decrease.connect_activate(glib::clone!(@weak window => move |_, _| {
+        {
+            let mut lck = _rlr.lock().unwrap();
+            if !lck.protractor {
+                if lck.rotate {
+                    lck.height -= 50;
+                    lck.height = std::cmp::max(50, lck.height);
+                } else {
+                    lck.width -= 50;
+                    lck.width = std::cmp::max(50, lck.width);
+                }
+                lck.set_size(&window);
+            } else {
+                lck.width -= 50;
+                lck.width = std::cmp::max(50, lck.width);
+                lck.height = lck.width;
+                lck.set_size(&window);
+            }
+        }
+        window.queue_draw();
+    }));
     // We need to add all the actions to the application so they can be taken into account.
+    application.add_action(&increase);
+    application.add_action(&decrease);
     application.add_action(&freeze);
     application.add_action(&protractor);
     application.add_action(&rotate);

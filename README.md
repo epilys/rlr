@@ -15,6 +15,8 @@
 - Press `f` or `<Space>` to toggle freezing the measurements.
 - Press `Control_L` and drag the angle base side to rotate it in protractor mode.
 - Press `Control_L` continuously to disable precision (measurements will snap to nearest integer).
+- Press `+` to increase size.
+- Press `-` to decrease size.
 
 ## build
 
