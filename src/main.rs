@@ -31,9 +31,9 @@ use gtk::cairo::{Context, FontSlant, FontWeight};
 struct Rlr {
     position: (f64, f64),
     root_position: (i32, i32),
-    breadth: f64,
     width: i32,
     height: i32,
+    p_dimens: Option<(i32, i32)>,
     freeze: bool,
     rotate: bool,
     protractor: bool,
@@ -47,9 +47,9 @@ impl Default for Rlr {
         Rlr {
             position: (0., 0.),
             root_position: (0, 0),
-            breadth: 35.,
             width: 500,
             height: 35,
+            p_dimens: None,
             freeze: false,
             rotate: false,
             protractor: false,
@@ -69,15 +69,12 @@ fn draw_rlr(rlr: Arc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> Inhibit {
 }
 
 impl Rlr {
-    fn resize(&self, window: &gtk::ApplicationWindow) {
+    fn set_size(&mut self, window: &gtk::ApplicationWindow) {
         if self.protractor {
-            window.resize(self.width as i32, self.width as i32);
+            let max = std::cmp::max(self.width, self.height);
+            window.resize(max, max);
         } else {
-            if self.rotate {
-                window.resize(self.height as i32, self.width as i32);
-            } else {
-                window.resize(self.width as i32, self.height as i32);
-            }
+            window.resize(self.width, self.height);
         }
     }
 
@@ -94,7 +91,7 @@ impl Rlr {
     }
 
     fn draw_douglas(&self, _drar: &DrawingArea, cr: &Context) -> Inhibit {
-        let length: f64 = self.width as f64;
+        let length: f64 = std::cmp::min(self.width, self.height) as f64;
         let root_position = self.root_position;
         let root_position = (
             root_position.0 as f64 - length / 2.,
@@ -201,7 +198,7 @@ impl Rlr {
         Inhibit(false)
     }
 
-    fn draw_rlr(&self, drar: &DrawingArea, cr: &Context) -> Inhibit {
+    fn draw_rlr(&self, _drar: &DrawingArea, cr: &Context) -> Inhibit {
         let position = self.position;
         /*
         let root_window = drar
@@ -213,13 +210,13 @@ impl Rlr {
             .position();
         std::dbg!(root_window);
         */
-        let mut length: f64 = drar.allocated_width() as f64;
-        let _height: f64 = drar.allocated_height() as f64;
-        let mut breadth = self.breadth;
-
-        if self.rotate {
-            std::mem::swap(&mut breadth, &mut length);
-        }
+        let length: f64 = self.width as f64;
+        let height: f64 = self.height as f64;
+        let breadth = if self.rotate {
+            self.width as f64
+        } else {
+            self.height as f64
+        };
 
         //println!("Extents: {:?}", cr.fill_extents());
 
@@ -236,7 +233,7 @@ impl Rlr {
         cr.set_source_rgb(0.1, 0.1, 0.1);
         cr.set_line_width(1.);
         if self.rotate {
-            while i < self.width {
+            while i < self.height {
                 x = (i as f64).floor() + 0.5;
                 cr.move_to(1.0, x);
                 let tick_size = if i % 50 == 0 {
@@ -270,7 +267,7 @@ impl Rlr {
             cr.show_text(&format!("{}px", pos))
                 .expect("Invalid cairo surface state");
 
-            cr.rectangle(0.5, 0.5, self.height as f64 - 1.0, self.width as f64 - 1.0);
+            cr.rectangle(0.5, 0.5, length - 1.0, height - 1.0);
             cr.stroke().expect("Invalid cairo surface state");
         } else {
             while i < self.width {
@@ -333,15 +330,9 @@ fn main() {
     application.connect_activate(move |application: &gtk::Application| {
         let _rlr = rlr.clone();
         let _rlr2 = rlr.clone();
-        let (width, height) = {
-            let l = _rlr.lock().unwrap();
-            (l.width, l.height)
-        };
         drawable(
             application,
             _rlr,
-            width,
-            height,
             move |drar: &DrawingArea, cr: &Context| -> Inhibit {
                 let _rlr = _rlr2.clone();
                 draw_rlr(_rlr, drar, cr)
@@ -352,13 +343,8 @@ fn main() {
     application.run();
 }
 
-fn drawable<F>(
-    application: &gtk::Application,
-    rlr: Arc<Mutex<Rlr>>,
-    width: i32,
-    height: i32,
-    draw_fn: F,
-) where
+fn drawable<F>(application: &gtk::Application, rlr: Arc<Mutex<Rlr>>, draw_fn: F)
+where
     F: Fn(&DrawingArea, &Context) -> Inhibit + 'static,
 {
     let window = gtk::ApplicationWindow::builder()
@@ -499,8 +485,20 @@ fn drawable<F>(
             Inhibit(false)
         },
     );
+    let _rlr = rlr.clone();
+    window.connect_configure_event(
+        move |window: &gtk::ApplicationWindow, event: &gdk::EventConfigure| -> bool {
+            let rlr = _rlr.clone();
+            let mut lck = rlr.lock().unwrap();
+            lck.width = event.size().0 as i32;
+            lck.height = event.size().1 as i32;
+            window.queue_draw();
+
+            false
+        },
+    );
     window.set_app_paintable(true); // crucial for transparency
-                                    //window.set_resizable(true);
+    window.set_resizable(true);
     window.set_decorated(false);
     //#[cfg(debug_assertions)]
     //gtk::Window::set_interactive_debugging(true);
@@ -509,7 +507,9 @@ fn drawable<F>(
 
     drawing_area.connect_draw(draw_fn);
 
-    window.set_default_size(width, height);
+    if let Ok(lck) = rlr.lock() {
+        window.set_default_size(lck.width, lck.height);
+    }
 
     window.add(&drawing_area);
     window.set_opacity(0.8);
@@ -600,8 +600,13 @@ fn add_actions(
     rotate.connect_activate(glib::clone!(@weak window => move |_, _| {
         {
             let mut lck = _rlr.lock().unwrap();
+            if !lck.protractor {
             lck.rotate = !lck.rotate;
-            lck.resize(&window);
+            let tmp = lck.width;
+            lck.width = lck.height;
+            lck.height = tmp;
+            lck.set_size(&window);
+            }
         }
         window.queue_draw();
     }));
@@ -611,7 +616,16 @@ fn add_actions(
         {
             let mut lck = rlr.lock().unwrap();
             lck.protractor = !lck.protractor;
-            lck.resize(&window);
+            if let Some((w, h)) = lck.p_dimens.take() {
+                lck.p_dimens = Some((lck.width,lck.height ));
+                lck.width = w;
+                lck.height = h;
+                window.resize(w, h);
+            } else {
+                lck.p_dimens = Some((lck.width,lck.height ));
+                lck.set_size(&window);
+            }
+
         }
         window.queue_draw();
     }));
