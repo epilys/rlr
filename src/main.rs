@@ -29,6 +29,70 @@ use gtk::cairo::{Context, FontSlant, FontWeight};
 
 include!("logo.xpm.rs");
 
+// Encode rotation state/angles around the starting left side as the origin point:
+//
+//                   North
+//                    ^^^
+//                    |3|
+//                    |2|
+//               >    |1|
+//              /     |0|      \
+//            -/      +-+       \
+//           /          .       v
+//       <--------+.........+-------->
+// West  < 3 2 1 0|     .   |0 1 2 3 > East
+//       <--------+     .   +-------->
+//                      .        /
+//             ^      +++      /-
+//              \     |0|     <
+//               \    |1|
+//                    |2|
+//                    |3|
+//                    vvv
+//
+//                    South
+//
+//
+#[derive(Debug, Copy, Clone)]
+#[repr(u8)]
+enum Rotation {
+    E = 0,
+    S = 1,
+    W = 2,
+    N = 3,
+}
+
+impl Rotation {
+    #[inline(always)]
+    fn is_rotated(self) -> bool {
+        match self as u8 {
+            0 | 2 => false,
+            _ => true,
+        }
+    }
+
+    #[inline(always)]
+    fn is_reversed(self) -> bool {
+        match self as u8 {
+            2 | 3 => true,
+            _ => false,
+        }
+    }
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<(Option<bool>, Option<bool>)> {
+        use Rotation::*;
+        let (new_val, ret) = match *self {
+            E => (S, None),
+            S => (W, Some((false.into(), None))),
+            W => (N, Some((true.into(), false.into()))),
+            N => (E, Some((None, true.into()))),
+        };
+        *self = new_val;
+        ret
+    }
+}
+
 #[derive(Debug)]
 struct Rlr {
     position: (f64, f64),
@@ -37,7 +101,7 @@ struct Rlr {
     height: i32,
     p_dimens: Option<(i32, i32)>,
     freeze: bool,
-    rotate: bool,
+    rotate: Rotation,
     protractor: bool,
     precision: bool,
     edit_angle_offset: bool,
@@ -53,7 +117,7 @@ impl Default for Rlr {
             height: 35,
             p_dimens: None,
             freeze: false,
-            rotate: false,
+            rotate: Rotation::E,
             protractor: false,
             precision: true,
             edit_angle_offset: false,
@@ -204,17 +268,17 @@ impl Rlr {
         let position = self.position;
         /*
         let root_window = drar
-            .display()
-            .device_manager()
-            .unwrap()
-            .client_pointer()
-            .unwrap()
-            .position();
+        .display()
+        .device_manager()
+        .unwrap()
+        .client_pointer()
+        .unwrap()
+        .position();
         std::dbg!(root_window);
         */
         let length: f64 = self.width as f64;
         let height: f64 = self.height as f64;
-        let breadth = if self.rotate {
+        let breadth = if self.rotate.is_rotated() {
             self.width as f64
         } else {
             self.height as f64
@@ -234,9 +298,13 @@ impl Rlr {
         let mut x: f64;
         cr.set_source_rgb(0.1, 0.1, 0.1);
         cr.set_line_width(1.);
-        if self.rotate {
+        let is_reversed = self.rotate.is_reversed();
+        if self.rotate.is_rotated() {
             while i < self.height {
                 x = (i as f64).floor() + 0.5;
+                if is_reversed {
+                    x = height - x;
+                }
                 cr.move_to(1.0, x);
                 let tick_size = if i % 50 == 0 {
                     tick_size * 1.5
@@ -283,6 +351,9 @@ impl Rlr {
         } else {
             while i < self.width {
                 x = (i as f64).floor() + 0.5;
+                if is_reversed {
+                    x = length - x;
+                }
                 cr.move_to(x, 1.0);
                 let tick_size = if i % 50 == 0 {
                     tick_size * 1.5
@@ -343,6 +414,7 @@ fn main() {
     application.connect_startup(|application: &gtk::Application| {
         application.set_accels_for_action("app.quit", &["<Primary>Q", "Q"]);
         application.set_accels_for_action("app.rotate", &["R"]);
+        application.set_accels_for_action("app.flip", &["<Shift>R"]);
         application.set_accels_for_action("app.protractor", &["P"]);
         application.set_accels_for_action("app.freeze", &["F", "space"]);
         application.set_accels_for_action("app.increase", &["plus"]);
@@ -408,11 +480,17 @@ where
                         lck.position.0 = root_position.0 as f64;
                         lck.position.1 = root_position.1 as f64;
                         window.queue_draw();
-                    } else if lck.rotate && root_position.1 < lck.width && root_position.1 > 0 {
+                    } else if lck.rotate.is_rotated()
+                        && root_position.1 < lck.height
+                        && root_position.1 > 0
+                    {
                         lck.root_position = root_position;
                         lck.position.1 = root_position.1 as f64;
                         window.queue_draw();
-                    } else if !lck.rotate && root_position.0 < lck.width && root_position.0 > 0 {
+                    } else if !lck.rotate.is_rotated()
+                        && root_position.0 < lck.width
+                        && root_position.0 > 0
+                    {
                         lck.root_position = root_position;
                         lck.position.0 = root_position.0 as f64;
                         window.queue_draw();
@@ -623,17 +701,48 @@ fn add_actions(
         window.queue_draw();
     }));
 
+    let flip = gio::SimpleAction::new("flip", None);
+    let _rlr = rlr.clone();
+    flip.connect_activate(glib::clone!(@weak window => move |_, _| {
+        {
+            let mut lck = _rlr.lock().unwrap();
+            if !lck.protractor {
+                let _ = lck.rotate.next();
+                let _ = lck.rotate.next();
+            }
+        }
+        window.queue_draw();
+    }));
     let rotate = gio::SimpleAction::new("rotate", None);
     let _rlr = rlr.clone();
     rotate.connect_activate(glib::clone!(@weak window => move |_, _| {
         {
             let mut lck = _rlr.lock().unwrap();
             if !lck.protractor {
-            lck.rotate = !lck.rotate;
-            let tmp = lck.width;
-            lck.width = lck.height;
-            lck.height = tmp;
-            lck.set_size(&window);
+                let tmp = lck.width;
+                lck.width = lck.height;
+                lck.height = tmp;
+                lck.set_size(&window);
+                if let Some(direction) = lck.rotate.next() {
+                    let (mut x, mut y) = window.position();
+                    if let Some(dir_x) = direction.0 {
+                        if dir_x {
+                            x += lck.height;
+                        } else {
+                            x = x.saturating_sub(lck.width);
+                            x = std::cmp::max(10, x);
+                        }
+                    }
+                    if let Some(dir_y) = direction.1 {
+                        if dir_y {
+                            y += lck.width;
+                        } else {
+                            y = y.saturating_sub(lck.height);
+                            y = std::cmp::max(10, y);
+                        }
+                    }
+                    window.move_(x, y);
+                }
             }
         }
         window.queue_draw();
@@ -669,8 +778,8 @@ fn add_actions(
         let p = AboutDialog::new();
         p.set_program_name("rlr");
         p.set_logo(Some(&gtk::gdk_pixbuf::Pixbuf::from_xpm_data(
-     ICON,
-)));
+                    ICON,
+        )));
         p.set_website_label(Some("https://github.com/epilys/rlr"));
         p.set_website(Some("https://github.com/epilys/rlr"));
         p.set_authors(&["Manos Pitsidianakis"]);
@@ -680,7 +789,7 @@ fn add_actions(
         p.set_transient_for(Some(&window));
         p.set_comments(Some("- Quit with `q` or `Ctrl-Q`.
 - Click to drag.
-- Press `r` to rotate 90 degrees.
+- Press `r` to rotate 90 degrees. Press `<Shift>r` to flip (mirror) the marks without rotation.
 - Press `p` to toggle protractor mode.
 - Press `f` or `<Space>` to toggle freezing the measurements.
 - Press `Control_L` and drag the angle base side to rotate it in protractor mode.
@@ -698,7 +807,7 @@ fn add_actions(
         {
             let mut lck = _rlr.lock().unwrap();
             if !lck.protractor {
-                if lck.rotate {
+                if lck.rotate.is_rotated() {
                     lck.height += 50;
                 } else {
                     lck.width += 50;
@@ -718,7 +827,7 @@ fn add_actions(
         {
             let mut lck = _rlr.lock().unwrap();
             if !lck.protractor {
-                if lck.rotate {
+                if lck.rotate.is_rotated() {
                     lck.height -= 50;
                     lck.height = std::cmp::max(50, lck.height);
                 } else {
@@ -801,6 +910,7 @@ fn add_actions(
     application.add_action(&freeze);
     application.add_action(&protractor);
     application.add_action(&rotate);
+    application.add_action(&flip);
     application.add_action(&about);
     application.add_action(&quit);
 }

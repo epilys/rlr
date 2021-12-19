@@ -25,7 +25,7 @@ Rust + GTK interactive pixel screen ruler with protractor mode.
 
 - Quit with `q` or `Ctrl-Q`.
 - Click to drag.
-- Press `r` to rotate 90 degrees.
+- Press `r` to rotate 90 degrees. Press `<Shift>r` to flip (mirror) the marks without rotation.
 - Press `p` to toggle protractor mode.
 - Press `f` or `<Space>` to toggle freezing the measurements.
 - Press `Control_L` and drag the angle base side to rotate it in protractor mode.
