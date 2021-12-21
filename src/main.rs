@@ -202,6 +202,7 @@ impl Rlr {
         //cr.rectangle(0.5, 0.5, length - 1.0, length - 1.0);
         //cr.stroke().expect("Invalid cairo surface state");
 
+        /* Make concentric circles at distance `tick_size` */
         for i in 1..(length / 2.).floor() as i64 {
             let r = (i as f64) * tick_size * 10.;
             cr.arc(length / 2., length / 2., r, 0., 2. * std::f64::consts::PI);
@@ -211,6 +212,7 @@ impl Rlr {
             }
         }
 
+        /* Make circular angle ticks at the outmost circle */
         let mut a = 0.;
         while a <= (2. * PI) {
             let tick_size = if (a.abs() * (180. / PI)) % 30. <= 0.55 {
@@ -231,6 +233,7 @@ impl Rlr {
             a += 0.01;
         }
 
+        /* Make 0 radian radius (offsetted by `self.angle_offset`) */
         cr.save().unwrap();
         cr.set_line_width(2.);
         cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
@@ -240,6 +243,7 @@ impl Rlr {
         cr.stroke().expect("Invalid cairo surface state");
         cr.restore().unwrap();
 
+        /* Draw radius tracking mouse position */
         cr.save().unwrap();
         let _angle = if self.precision {
             angle + FRAC_PI_2
@@ -249,6 +253,8 @@ impl Rlr {
         cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
         cr.rotate(2. * PI - _angle);
         let cur = cr.current_point().unwrap();
+
+        /* (Draw center point as a small circle ) */
         cr.arc(cur.0, cur.1, 2., 0., 2. * std::f64::consts::PI);
         cr.stroke().expect("Invalid cairo surface state");
         cr.move_to(cur.0, cur.1);
@@ -258,6 +264,7 @@ impl Rlr {
         cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
         //cr.set_font_size(0.35);
 
+        /* Draw arc signifying which angle is being measured */
         cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
         let angle = if root_position.1 < 0. {
             (PI - angle.abs()) + PI - self.angle_offset
@@ -272,6 +279,8 @@ impl Rlr {
             2. * PI - self.angle_offset,
         );
         cr.stroke().expect("Invalid cairo surface state");
+
+        /* Show angle measurement as text */
         cr.move_to(length / 2. - 5.5, length / 2. - 15.5);
         cr.show_text(&format!(
             " {:.2}rad {:.2}°",
