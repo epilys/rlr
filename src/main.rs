@@ -93,6 +93,23 @@ impl Rotation {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+enum Interval {
+    None,
+    Start(f64),
+    Full(f64, f64),
+}
+
+impl Interval {
+    #[inline(always)]
+    fn is_start(&self) -> bool {
+        match self {
+            Interval::Start(_) => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Rlr {
     position: (f64, f64),
@@ -106,6 +123,7 @@ struct Rlr {
     precision: bool,
     edit_angle_offset: bool,
     angle_offset: f64,
+    interval: Interval,
 }
 
 impl Default for Rlr {
@@ -122,6 +140,7 @@ impl Default for Rlr {
             precision: true,
             edit_angle_offset: false,
             angle_offset: 0.,
+            interval: Interval::None,
         }
     }
 }
@@ -296,6 +315,47 @@ impl Rlr {
         let tick_size = 5.;
         let mut i = 0;
         let mut x: f64;
+        cr.set_line_width(0.5);
+        cr.set_source_rgb(0.1, 0.1, 0.1);
+        match self.interval {
+            Interval::Start(start_pos) => {
+                cr.set_source_rgb(0.9, 0.9, 0.9);
+                cr.rectangle(
+                    start_pos - 0.5,
+                    0.5,
+                    position.0 - start_pos - 0.5,
+                    breadth - 0.5,
+                );
+                cr.fill().expect("Invalid cairo surface state");
+                cr.set_source_rgb(0.1, 0.1, 0.1);
+                cr.rectangle(
+                    start_pos - 0.5,
+                    0.5,
+                    position.0 - start_pos - 0.5,
+                    breadth - 0.5,
+                );
+                cr.stroke().expect("Invalid cairo surface state");
+            }
+            Interval::Full(start_pos, end_pos) => {
+                cr.set_source_rgb(0.8, 0.8, 0.8);
+                cr.rectangle(
+                    start_pos - 0.5,
+                    0.5,
+                    end_pos - 0.5 - start_pos,
+                    breadth - 0.5,
+                );
+                cr.fill().expect("Invalid cairo surface state");
+                cr.set_source_rgb(0.1, 0.1, 0.1);
+                cr.rectangle(
+                    start_pos - 0.5,
+                    0.5,
+                    end_pos - 0.5 - start_pos,
+                    breadth - 0.5,
+                );
+                cr.stroke().expect("Invalid cairo surface state");
+            }
+            _ => {}
+        }
         cr.set_source_rgb(0.1, 0.1, 0.1);
         cr.set_line_width(1.);
         let is_reversed = self.rotate.is_reversed();
@@ -512,11 +572,27 @@ where
         move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventButton| -> Inhibit {
             let rlr = _rlr.clone();
             let mut lck = rlr.lock().unwrap();
-            //println!("drag begin");
 
-            if ev.button() == 1 && !lck.precision {
+            if ev.event_type() == gtk::gdk::EventType::ButtonPress && lck.interval.is_start() {
+                if let Interval::Start(start_pos) = lck.interval {
+                    lck.interval = Interval::Full(
+                        start_pos,
+                        if lck.rotate.is_rotated() {
+                            ev.position().1
+                        } else {
+                            ev.position().0
+                        },
+                    );
+                }
+            } else if ev.event_type() == gtk::gdk::EventType::DoubleButtonPress {
+                if lck.rotate.is_rotated() {
+                    lck.interval = Interval::Start(ev.position().1);
+                } else {
+                    lck.interval = Interval::Start(ev.position().0);
+                }
+            } else if ev.button() == 1 && !lck.precision {
                 lck.edit_angle_offset = true;
-            } else {
+            } else if ev.button() == 1 {
                 window.begin_move_drag(
                     ev.button() as _,
                     ev.root().0 as _,
