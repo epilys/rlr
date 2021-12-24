@@ -124,6 +124,7 @@ struct Rlr {
     edit_angle_offset: bool,
     angle_offset: f64,
     interval: Interval,
+    ppi: f64,
 }
 
 impl Default for Rlr {
@@ -141,12 +142,14 @@ impl Default for Rlr {
             edit_angle_offset: false,
             angle_offset: 0.,
             interval: Interval::None,
+            ppi: 72.,
         }
     }
 }
 
 fn draw_rlr(rlr: Arc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> Inhibit {
     let lck = rlr.lock().unwrap();
+    cr.set_font_size(8. * lck.ppi / 72.);
     if lck.protractor {
         return lck.draw_douglas(drar, cr);
     }
@@ -748,9 +751,43 @@ where
 
     build_system_menu(application);
 
+    let _rlr = rlr.clone();
     add_actions(application, &window, rlr);
 
     window.show_all();
+    let ppi = get_ppi(&window);
+    if ppi > 72. {
+        if let Ok(mut lck) = _rlr.lock() {
+            lck.ppi = ppi;
+            lck.width += lck.width / 2;
+            lck.height += lck.height / 2;
+            window.set_default_size(lck.width, lck.height);
+            window.resize(lck.width, lck.height);
+            window.queue_draw();
+            println!("resized to {} {}", lck.width, lck.height);
+        }
+    }
+}
+
+fn get_ppi(window: &gtk::ApplicationWindow) -> f64 {
+    let screen = window.screen().unwrap();
+    let mon_num: i32 = screen.monitor_at_window(&window.window().unwrap());
+    let width_mm = screen.monitor_width_mm(mon_num) as f64;
+    let height_mm = screen.monitor_height_mm(mon_num) as f64;
+
+    let rectangle = screen.monitor_geometry(mon_num);
+    let width = rectangle.width as f64;
+    let height = rectangle.height as f64;
+    const INCH: f64 = 0.0393701;
+    let diag = (width_mm * width_mm + height_mm * height_mm).sqrt() * INCH;
+
+    let ppi = (width * width + height * height).sqrt() / diag;
+    //std::dbg!(
+    //    ppi,
+    //    width / (width_mm as f64 * INCH),
+    //    height / (height_mm as f64 * INCH)
+    //);
+    ppi
 }
 
 fn enter_notify(window: &gtk::ApplicationWindow, _crossing: &gtk::gdk::EventCrossing) -> Inhibit {
