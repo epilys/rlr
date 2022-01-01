@@ -407,12 +407,32 @@ impl Rlr {
             cr.move_to(1.0, x);
             cr.line_to(breadth, x);
             cr.stroke().expect("Invalid cairo surface state");
+            let pos_label = format!("{}px", pos);
+            let extents = cr
+                .text_extents(&pos_label)
+                .expect("Invalid cairo surface state");
+            cr.rectangle(
+                breadth / 2. - extents.width as f64 / 2. - 2.,
+                x - extents.height as f64 - 2.,
+                extents.width as f64 + 6.5,
+                extents.height as f64 + 6.5,
+            );
+            cr.stroke().expect("Invalid cairo surface state");
+            cr.rectangle(
+                breadth / 2. - extents.width as f64 / 2.,
+                x - extents.height as f64,
+                extents.width as f64 + 4.5,
+                extents.height as f64 + 4.5,
+            );
+            cr.set_source_rgb(1.0, 1.0, 1.0);
+            cr.fill().expect("Invalid cairo surface state");
+            cr.set_source_rgb(0.1, 0.1, 0.1);
 
             cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
             //cr.set_font_size(0.35);
 
-            cr.move_to(breadth / 4., x);
-            cr.show_text(&format!("{}px", pos))
+            cr.move_to(breadth / 2. - extents.width as f64 / 2., x);
+            cr.show_text(&pos_label)
                 .expect("Invalid cairo surface state");
 
             cr.rectangle(0.5, 0.5, length - 1.0, height - 1.0);
@@ -452,16 +472,37 @@ impl Rlr {
             } else {
                 (position.0 / 10.).floor() * 10.
             };
-            let x = pos + 0.5;
-            cr.move_to(x, 1.0);
-            cr.line_to(x, breadth);
+            let x = pos + 0.5 + 2.0;
+            cr.move_to(x - 2., 1.0);
+            cr.line_to(x - 2., breadth);
             cr.stroke().expect("Invalid cairo surface state");
+
+            let pos_label = format!("{}px", pos);
+            let extents = cr
+                .text_extents(&pos_label)
+                .expect("Invalid cairo surface state");
+            cr.rectangle(
+                x - 2.,
+                breadth / 2. - extents.height as f64 - 2.,
+                extents.width as f64 + 6.5,
+                extents.height as f64 + 10.5,
+            );
+            cr.stroke().expect("Invalid cairo surface state");
+            cr.rectangle(
+                x,
+                breadth / 2. - extents.height as f64,
+                extents.width as f64 + 4.5,
+                extents.height as f64 + 8.5,
+            );
+            cr.set_source_rgb(1.0, 1.0, 1.0);
+            cr.fill().expect("Invalid cairo surface state");
+            cr.set_source_rgb(0.1, 0.1, 0.1);
 
             cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
             //cr.set_font_size(0.35);
 
-            cr.move_to(x, breadth / 2.);
-            cr.show_text(&format!("{}px", pos))
+            cr.move_to(x, breadth / 2. + 2.5);
+            cr.show_text(&pos_label)
                 .expect("Invalid cairo surface state");
 
             cr.rectangle(0.5, 0.5, length - 1.0, breadth - 1.0);
