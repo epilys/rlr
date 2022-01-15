@@ -29,6 +29,12 @@ use gtk::cairo::{Context, FontSlant, FontWeight};
 
 include!("logo.xpm.rs");
 
+#[derive(Debug, Copy, Clone)]
+#[repr(u8)]
+enum Unit {
+    Pixels = 0,
+    Inches,
+}
 // Encode rotation state/angles around the starting left side as the origin point:
 //
 //                   North
@@ -125,6 +131,7 @@ struct Rlr {
     angle_offset: f64,
     interval: Interval,
     ppi: f64,
+    unit: Unit,
 }
 
 impl Default for Rlr {
@@ -143,13 +150,14 @@ impl Default for Rlr {
             angle_offset: 0.,
             interval: Interval::None,
             ppi: 72.,
+            unit: Unit::Inches,
         }
     }
 }
 
 fn draw_rlr(rlr: Arc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> Inhibit {
     let lck = rlr.lock().unwrap();
-    cr.set_font_size(8. * lck.ppi / 72.);
+    cr.set_font_size(8. * std::cmp::max(lck.ppi as i64, 72) as f64 / 72.);
     if lck.protractor {
         return lck.draw_douglas(drar, cr);
     }
@@ -197,7 +205,6 @@ impl Rlr {
         cr.set_source_rgb(1., 1.0, 1.0);
         cr.fill().expect("Invalid cairo surface state");
 
-        let _pixels_per_tick = 10;
         let tick_size = 5.;
         cr.set_source_rgb(0.1, 0.1, 0.1);
         cr.set_line_width(1.);
@@ -265,7 +272,7 @@ impl Rlr {
         cr.stroke().expect("Invalid cairo surface state");
         cr.restore().unwrap();
         cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
-        //cr.set_font_size(0.35);
+        //cr.set_font_size(0.35*self.ppi/72.);
 
         /* Draw arc signifying which angle is being measured */
         cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
@@ -323,7 +330,6 @@ impl Rlr {
         cr.set_source_rgb(1., 1.0, 1.0);
         cr.paint().expect("Invalid cairo surface state");
 
-        let _pixels_per_tick = 10;
         let tick_size = 5.;
         let mut i = 0;
         let mut x: f64;
@@ -392,14 +398,31 @@ impl Rlr {
                 cr.stroke().expect("Invalid cairo surface state");
                 if i % 50 == 0 {
                     cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
-                    let label = format!("{}", i);
+                    let label = format!(
+                        "{}",
+                        match self.unit {
+                            Unit::Pixels => {
+                                i
+                            }
+                            Unit::Inches => {
+                                i / (self.ppi / 2.54 / 5.) as i32
+                            }
+                        }
+                    );
                     let extents = cr
                         .text_extents(&label)
                         .expect("Invalid cairo surface state");
                     cr.move_to(breadth / 2. - 2.5 - extents.width as f64 / 2., x);
                     cr.show_text(&label).expect("Invalid cairo surface state");
                 }
-                i += 2;
+                match self.unit {
+                    Unit::Pixels => {
+                        i += 2;
+                    }
+                    Unit::Inches => {
+                        i += (self.ppi / 2.54 / 5.) as i32;
+                    }
+                }
             }
             let pos = if self.precision {
                 position.1.floor()
@@ -461,14 +484,31 @@ impl Rlr {
                 cr.stroke().expect("Invalid cairo surface state");
                 if i % 50 == 0 {
                     cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
-                    let label = format!("{}", i);
+                    let label = format!(
+                        "{}",
+                        match self.unit {
+                            Unit::Pixels => {
+                                i
+                            }
+                            Unit::Inches => {
+                                i / (5 * (self.ppi / 2.54 / 5.) as i32)
+                            }
+                        }
+                    );
                     let extents = cr
                         .text_extents(&label)
                         .expect("Invalid cairo surface state");
                     cr.move_to(x - extents.width as f64 / 2., breadth / 2. + 2.5);
                     cr.show_text(&label).expect("Invalid cairo surface state");
                 }
-                i += 2;
+                match self.unit {
+                    Unit::Pixels => {
+                        i += 2;
+                    }
+                    Unit::Inches => {
+                        i += (self.ppi / 2.54 / 5.) as i32;
+                    }
+                }
             }
             let pos = if self.precision {
                 position.0.floor()
@@ -517,10 +557,7 @@ impl Rlr {
 }
 
 fn main() {
-    let application = gtk::Application::new(
-        Some("com.github.gtk-rs.examples.cairotest"),
-        Default::default(),
-    );
+    let application = gtk::Application::new(Some("com.epilys.rlr"), Default::default());
 
     let rlr = Arc::new(Mutex::new(Rlr::default()));
 
@@ -756,9 +793,9 @@ where
 
     window.show_all();
     let ppi = get_ppi(&window);
-    if ppi > 72. {
-        if let Ok(mut lck) = _rlr.lock() {
-            lck.ppi = ppi;
+    if let Ok(mut lck) = _rlr.lock() {
+        lck.ppi = ppi;
+        if ppi > 72. {
             lck.width += lck.width / 2;
             lck.height += lck.height / 2;
             window.set_default_size(lck.width, lck.height);
@@ -766,7 +803,7 @@ where
             window.queue_draw();
             println!("resized to {} {}", lck.width, lck.height);
         }
-    }
+    };
 }
 
 fn get_ppi(window: &gtk::ApplicationWindow) -> f64 {
