@@ -1,13 +1,14 @@
 [package]
 name = "rlr-gtk"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
-license-file = "LICENSE"
+license = "GPL-3.0-or-later"
 description = "pixel screen ruler"
 repository = "https://github.com/epilys/rlr"
+keywords = ["ruler", "screen"]
 
 [dependencies]
-gtk = "0.14.3"
+gtk = "^0.14"
 
 [[bin]]
 name = "rlr"

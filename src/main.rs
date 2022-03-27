@@ -764,7 +764,7 @@ where
             window.set_default_size(lck.width, lck.height);
             window.resize(lck.width, lck.height);
             window.queue_draw();
-            println!("resized to {} {}", lck.width, lck.height);
+            //println!("resized to {} {}", lck.width, lck.height);
         }
     }
 }
