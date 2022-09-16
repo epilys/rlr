@@ -65,18 +65,12 @@ enum Rotation {
 impl Rotation {
     #[inline(always)]
     fn is_rotated(self) -> bool {
-        match self as u8 {
-            0 | 2 => false,
-            _ => true,
-        }
+        !matches!(self as u8, 0 | 2)
     }
 
     #[inline(always)]
     fn is_reversed(self) -> bool {
-        match self as u8 {
-            2 | 3 => true,
-            _ => false,
-        }
+        matches!(self as u8, 2 | 3)
     }
 
     #[inline(always)]
@@ -103,10 +97,7 @@ enum Interval {
 impl Interval {
     #[inline(always)]
     fn is_start(&self) -> bool {
-        match self {
-            Interval::Start(_) => true,
-            _ => false,
-        }
+        matches!(self, Interval::Start(_))
     }
 }
 
@@ -781,13 +772,13 @@ fn get_ppi(window: &gtk::ApplicationWindow) -> f64 {
     const INCH: f64 = 0.0393701;
     let diag = (width_mm * width_mm + height_mm * height_mm).sqrt() * INCH;
 
-    let ppi = (width * width + height * height).sqrt() / diag;
+    //let ppi = (width * width + height * height).sqrt() / diag;
     //std::dbg!(
     //    ppi,
     //    width / (width_mm as f64 * INCH),
     //    height / (height_mm as f64 * INCH)
     //);
-    ppi
+    (width * width + height * height).sqrt() / diag
 }
 
 fn enter_notify(window: &gtk::ApplicationWindow, _crossing: &gtk::gdk::EventCrossing) -> Inhibit {
@@ -1048,10 +1039,8 @@ fn add_actions(
         window.move_(x, y);
         window.queue_draw();
     }));
-    let _rlr = rlr.clone();
     let move_down = gio::SimpleAction::new("move_down", None);
     move_down.connect_activate(glib::clone!(@weak window => move |_, _| {
-        let rlr = _rlr.clone();
         let lck = rlr.lock().unwrap();
         let (x, mut y) = window.position();
         if !lck.precision {
