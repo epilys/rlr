@@ -524,11 +524,12 @@ fn main() {
         application.set_accels_for_action("app.increase", &["plus"]);
         application.set_accels_for_action("app.decrease", &["minus"]);
         application.set_accels_for_action("app.about", &["question", "F1"]);
-        application.set_accels_for_action("app.move_right", &["Right", "<Primary>Right"]);
-        application.set_accels_for_action("app.move_left", &["Left", "<Primary>Left"]);
-        application.set_accels_for_action("app.move_up", &["Up", "<Primary>Up"]);
-        application.set_accels_for_action("app.move_down", &["Down", "<Primary>Down"]);
-        application.set_accels_for_action("app.move_to_center", &["Home"]);
+        application
+            .set_accels_for_action("app.move_right", &["Right", "<Primary>Right", "rightarrow"]);
+        application.set_accels_for_action("app.move_left", &["Left", "<Primary>Left", "leftarrow"]);
+        application.set_accels_for_action("app.move_up", &["Up", "<Primary>Up", "uparrow"]);
+        application.set_accels_for_action("app.move_down", &["Down", "<Primary>Down", "downarrow"]);
+        application.set_accels_for_action("app.move_to_center", &["Home", "h"]);
     });
     application.connect_activate(move |application: &gtk::Application| {
         let _rlr = rlr.clone();
