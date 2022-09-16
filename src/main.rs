@@ -794,7 +794,6 @@ fn enter_notify(window: &gtk::ApplicationWindow, _crossing: &gtk::gdk::EventCros
     //println!("enter");
     if let Some(screen) = window.window() {
         let display = screen.display();
-        display.beep();
         if let Some(gdk_window) = window.window() {
             gdk_window.set_cursor(Some(
                 &gtk::gdk::Cursor::from_name(&display, "move").unwrap(),
