@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.1" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" xmlns:osb="http://www.openswatchbook.org/uri/2009/osb">
+  <linearGradient id="a" x1="8" x2="120" y1="124" y2="124" gradientUnits="userSpaceOnUse">
+    <stop stop-color="#e5a50a" offset="0"/>
+    <stop stop-color="#f6d32d" offset=".036"/>
+    <stop stop-color="#e5a50a" offset=".071"/>
+    <stop stop-color="#e5a50a" offset=".93"/>
+    <stop stop-color="#f6d32d" offset=".96"/>
+    <stop stop-color="#e5a50a" offset="1"/>
+  </linearGradient>
+  <path d="m16 40h96c4.4 0 8 3.6 8 8v60c0 4.4-3.6 8-8 8h-96c-4.4 0-8-3.6-8-8v-60c0-4.4 3.6-8 8-8z" fill="url(#a)"/>
+  <g transform="translate(0,10)">
+    <path d="m16 28h96c4.4 0 8 3.6 8 8v56c0 4.4-3.6 8-8 8h-96c-4.4 0-8-3.6-8-8v-56c0-4.4 3.6-8 8-8z" fill="#f6d32d"/>
+    <g fill="#524514">
+      <path d="m26 73h1.3v-1.3h1.3v-1.3h1.3v-11h-1.3v-1.3h-1.3v-1.3h-1.3v-1.3h-6.7v1.3h-1.3v1.3h-1.3v1.3h-1.3v11h1.3v1.3h1.3v1.3h1.3v1.3h6.7zm-5.3 0v-2.7h-1.3v-12h1.3v-1.3h4v2.7h1.3v11h-1.3v2.7z" style="font-variant-caps:normal;font-variant-east-asian:normal;font-variant-ligatures:normal;font-variant-numeric:normal"/>
+      <rect x="16" y="28" width="3.1" height="22" style="paint-order:markers stroke fill"/>
+      <g>
+        <rect x="108" y="28" width="3.1" height="22"/>
+        <rect x="23" y="28" width="3.1" height="11"/>
+        <rect x="47" y="28" width="3.1" height="17"/>
+        <rect x="29" y="28" width="3.1" height="11"/>
+        <rect x="35" y="28" width="3.1" height="11"/>
+        <rect x="41" y="28" width="3.1" height="11"/>
+        <rect x="53" y="28" width="3.1" height="11"/>
+        <rect x="59" y="28" width="3.1" height="11"/>
+        <rect x="66" y="28" width="3.1" height="11"/>
+        <rect x="72" y="28" width="3.1" height="11"/>
+        <rect x="78" y="28" width="3.1" height="17"/>
+        <rect x="84" y="28" width="3.1" height="11"/>
+        <rect x="90" y="28" width="3.1" height="11"/>
+        <rect x="96" y="28" width="3.1" height="11"/>
+        <rect x="102" y="28" width="3.1" height="11"/>
+      </g>
+      <path d="m70 91h-2.1v-15h2.1v-2.1h2.1v4.2h6.3v-4.2h-2.1v-2.1h-6.3v2.1h-2.1v-2.1h-6.3v2.1h-2.1v2.1h2.1v15h-2.1v2.1h10z" style="font-variant-caps:normal;font-variant-east-asian:normal;font-variant-ligatures:normal;font-variant-numeric:normal;paint-order:markers stroke fill"/>
+      <path d="m82 68v23h-4.2v2.1h13v-2.1h-2.1v-29h-2.1v2.1h-8.4v2.1h2.1v2.1z" style="font-variant-caps:normal;font-variant-east-asian:normal;font-variant-ligatures:normal;font-variant-numeric:normal;paint-order:markers stroke fill"/>
+      <path d="m103 91h-2.1v-15h2.1v-2.1h2.1v4.2h6.3v-4.2h-2.1v-2.1h-6.3v2.1h-2.1v-2.1h-6.3v2.1h-2.1v2.1h2.1v15h-2.1v2.1h10z" style="font-variant-caps:normal;font-variant-east-asian:normal;font-variant-ligatures:normal;font-variant-numeric:normal;paint-order:markers stroke fill"/>
+    </g>
+  </g>
+</svg>

@@ -1,6 +1,6 @@
 # `rlr`: a pixel screen ruler
 
-![./logo.png](./logo.png)
+![./rlr.png](./rlr.png)
 
 Rust + GTK interactive pixel screen ruler with protractor mode.
 
@@ -39,3 +39,19 @@ Rust + GTK interactive pixel screen ruler with protractor mode.
 ```shell
 cargo build --release
 ```
+
+## packaging
+
+To help packagers in OSes that support the XDG Desktop standards, a `.desktop`
+app launcher filer, an application icon and a symbolic application icon are
+included.
+
+- `rlr.desktop` should be installed in any of the following:
+  `/usr/share/applications/`, `/usr/local/share/applications/` or
+  `$HOME/.local/share/applications/`.
+- `rlr.svg` should be installed in
+  `/usr/share/icons/hicolor/scalable/apps/rlr.svg`.
+- `rlr.symbolic.svg` should be installed in
+  `/usr/share/icons/hicolor/symbolic/apps/rlr.svg`.
+
+The files have been contributed by <https://github.com/somepaulo>.

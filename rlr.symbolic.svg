@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+  <g fill="#2e3434">
+    <rect y="2" width="1.5" height="12" style="paint-order:stroke fill markers"/>
+    <rect x="2.4" y="2" width="1.5" height="4" style="paint-order:stroke fill markers"/>
+    <rect x="4.8" y="2" width="1.5" height="4" style="paint-order:stroke fill markers"/>
+    <rect transform="rotate(90)" x="8.4" y="-6.3" width="1.5" height="3.9" style="paint-order:stroke fill markers"/>
+    <rect transform="rotate(90)" x="14" y="-6.3" width="1.5" height="3.9" style="paint-order:stroke fill markers"/>
+    <rect x="7.2" y="2" width="1.5" height="4" style="paint-order:stroke fill markers"/>
+    <rect x="9.6" y="2" width="1.5" height="8" style="paint-order:stroke fill markers"/>
+    <rect x="12" y="2" width="1.5" height="4" style="paint-order:stroke fill markers"/>
+    <rect x="14" y="2" width="1.5" height="4" style="paint-order:stroke fill markers"/>
+    <rect x="2.4" y="8.4" width="1.5" height="7" style="paint-order:stroke fill markers"/>
+    <rect x="4.8" y="8.4" width="1.5" height="7" style="paint-order:stroke fill markers"/>
+  </g>
+</svg>
