@@ -98,12 +98,12 @@ enum Rotation {
 
 impl Rotation {
     #[inline(always)]
-    fn is_rotated(self) -> bool {
+    const fn is_rotated(self) -> bool {
         !matches!(self as u8, 0 | 2)
     }
 
     #[inline(always)]
-    fn is_reversed(self) -> bool {
+    const fn is_reversed(self) -> bool {
         matches!(self as u8, 2 | 3)
     }
 
@@ -130,7 +130,7 @@ enum Interval {
 
 impl Interval {
     #[inline(always)]
-    fn is_start(&self) -> bool {
+    const fn is_start(&self) -> bool {
         matches!(self, Self::Start(_))
     }
 }
@@ -329,11 +329,11 @@ impl Rlr {
     }
 
     fn draw_douglas(&self, _drar: &DrawingArea, cr: &Context) -> glib::Propagation {
-        let length: f64 = std::cmp::min(self.width, self.height) as f64;
+        let length: f64 = f64::from(std::cmp::min(self.width, self.height));
         let root_position = self.root_position;
         let root_position = (
-            root_position.0 as f64 - length / 2.,
-            -1. * (root_position.1 as f64 - length / 2.),
+            f64::from(root_position.0) - length / 2.,
+            -1. * (f64::from(root_position.1) - length / 2.),
         );
         let (xr, yr) = root_position;
         let angle = self.calc_angle_of_point((xr, yr));
@@ -392,7 +392,7 @@ impl Rlr {
                 cr.save().unwrap();
                 cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
                 // cr.rotate(1.5 * PI + (quadrant as f64) * FRAC_PI_2);
-                cr.rotate((quadrant as f64) * FRAC_PI_2);
+                cr.rotate(f64::from(quadrant) * FRAC_PI_2);
                 cr.rotate(-(a as f64 / 100.0));
                 let cur = cr.current_point().unwrap();
                 cr.move_to(cur.0 + length / 2. - 0.5 - tick_size, cur.1 - 0.5);
@@ -463,12 +463,12 @@ impl Rlr {
 
     fn draw_rlr(&self, _drar: &DrawingArea, cr: &Context) -> glib::Propagation {
         let position = self.position;
-        let length: f64 = self.width as f64;
-        let height: f64 = self.height as f64;
+        let length: f64 = f64::from(self.width);
+        let height: f64 = f64::from(self.height);
         let breadth = if self.rotate.is_rotated() {
-            self.width as f64
+            f64::from(self.width)
         } else {
-            self.height as f64
+            f64::from(self.height)
         };
 
         cr.set_secondary_color(&self.settings);
@@ -525,7 +525,7 @@ impl Rlr {
         let is_reversed = self.rotate.is_reversed();
         if self.rotate.is_rotated() {
             while i < self.height {
-                x = (i as f64).floor() + 0.5;
+                x = f64::from(i).floor() + 0.5;
                 if is_reversed {
                     x = height - x;
                 }
@@ -592,7 +592,7 @@ impl Rlr {
             cr.rectangle(0.5, 0.5, length - 1.0, height - 1.0);
         } else {
             while i < self.width {
-                x = (i as f64).floor() + 0.5;
+                x = f64::from(i).floor() + 0.5;
                 if is_reversed {
                     x = length - x;
                 }
@@ -755,22 +755,25 @@ where
                 if root_position != lck.root_position {
                     if lck.protractor {
                         lck.root_position = root_position;
-                        lck.position.0 = root_position.0 as f64;
-                        lck.position.1 = root_position.1 as f64;
+                        lck.position.0 = f64::from(root_position.0);
+                        lck.position.1 = f64::from(root_position.1);
+                        drop(lck);
                         window.queue_draw();
                     } else if lck.rotate.is_rotated()
                         && root_position.1 < lck.height
                         && root_position.1 > 0
                     {
                         lck.root_position = root_position;
-                        lck.position.1 = root_position.1 as f64;
+                        lck.position.1 = f64::from(root_position.1);
+                        drop(lck);
                         window.queue_draw();
                     } else if !lck.rotate.is_rotated()
                         && root_position.0 < lck.width
                         && root_position.0 > 0
                     {
                         lck.root_position = root_position;
-                        lck.position.0 = root_position.0 as f64;
+                        lck.position.0 = f64::from(root_position.0);
+                        drop(lck);
                         window.queue_draw();
                     }
                 }
@@ -803,14 +806,16 @@ where
                     );
                 }
             } else if ev.event_type() == gtk::gdk::EventType::DoubleButtonPress {
-                if lck.rotate.is_rotated() {
-                    lck.interval = Interval::Start(ev.position().1);
+                lck.interval = if lck.rotate.is_rotated() {
+                    Interval::Start(ev.position().1)
                 } else {
-                    lck.interval = Interval::Start(ev.position().0);
-                }
+                    Interval::Start(ev.position().0)
+                };
             } else if ev.button() == 1 && !lck.precision {
                 lck.edit_angle_offset = true;
+                drop(lck);
             } else if ev.button() == 1 {
+                #[allow(clippy::cast_possible_wrap)]
                 window.begin_move_drag(
                     ev.button() as i32,
                     ev.root().0 as i32,
@@ -827,10 +832,9 @@ where
               ev: &gtk::gdk::EventButton|
               -> glib::Propagation {
             let rlr = _rlr.clone();
-            let mut lck = rlr.lock().unwrap();
             // println!("drag end");
             if ev.button() == 1 {
-                lck.edit_angle_offset = false;
+                rlr.lock().unwrap().edit_angle_offset = false;
             }
             glib::Propagation::Proceed
         },
@@ -846,8 +850,7 @@ where
                 .unwrap_or(false)
             {
                 let rlr = _rlr.clone();
-                let mut lck = rlr.lock().unwrap();
-                lck.precision = false;
+                rlr.lock().unwrap().precision = false;
                 window.queue_draw();
             }
             glib::Propagation::Proceed
@@ -864,8 +867,7 @@ where
                 .unwrap_or(false)
             {
                 let rlr = _rlr.clone();
-                let mut lck = rlr.lock().unwrap();
-                lck.precision = true;
+                rlr.lock().unwrap().precision = true;
                 window.queue_draw();
             }
             glib::Propagation::Proceed
@@ -875,13 +877,18 @@ where
     window.connect_motion_notify_event(
         move |window: &gtk::ApplicationWindow, motion: &gdk::EventMotion| -> glib::Propagation {
             let rlr = _rlr.clone();
-            let mut lck = rlr.lock().unwrap();
-            lck.position = motion.position();
-            if lck.edit_angle_offset {
-                let (xr, yr) = lck.position;
-                let translated_position = (xr - lck.width as f64 / 2., lck.width as f64 / 2. - yr);
-                let angle = lck.calc_angle_of_point(translated_position);
-                lck.angle_offset = angle; // + FRAC_PI_2;
+            {
+                let mut lck = rlr.lock().unwrap();
+                lck.position = motion.position();
+                if lck.edit_angle_offset {
+                    let (xr, yr) = lck.position;
+                    let translated_position = (
+                        xr - f64::from(lck.width) / 2.,
+                        f64::from(lck.width) / 2. - yr,
+                    );
+                    let angle = lck.calc_angle_of_point(translated_position);
+                    lck.angle_offset = angle;
+                }
             }
             window.queue_draw();
             glib::Propagation::Proceed
@@ -891,9 +898,11 @@ where
     window.connect_configure_event(
         move |window: &gtk::ApplicationWindow, event: &gdk::EventConfigure| -> bool {
             let rlr = _rlr.clone();
-            let mut lck = rlr.lock().unwrap();
-            lck.width = event.size().0 as i32;
-            lck.height = event.size().1 as i32;
+            {
+                let mut lck = rlr.lock().unwrap();
+                lck.width = event.size().0.try_into().unwrap_or(i32::MAX);
+                lck.height = event.size().1.try_into().unwrap_or(i32::MAX);
+            }
             window.queue_draw();
 
             false
@@ -941,12 +950,12 @@ fn get_ppi(window: &gtk::ApplicationWindow) -> f64 {
     let monitor = display
         .monitor_at_window(&window.window().unwrap())
         .unwrap();
-    let width_mm = monitor.width_mm() as f64;
-    let height_mm = monitor.height_mm() as f64;
+    let width_mm = f64::from(monitor.width_mm());
+    let height_mm = f64::from(monitor.height_mm());
 
     let rectangle = monitor.geometry();
-    let width = rectangle.width() as f64;
-    let height = rectangle.height() as f64;
+    let width = f64::from(rectangle.width());
+    let height = f64::from(rectangle.height());
     const INCH: f64 = 0.0393701;
     let diag = (width_mm * width_mm + height_mm * height_mm).sqrt() * INCH;
 
@@ -975,7 +984,7 @@ fn enter_notify(
     glib::Propagation::Proceed
 }
 
-fn leave_notify(
+const fn leave_notify(
     _application: &gtk::ApplicationWindow,
     _crossing: &gtk::gdk::EventCrossing,
 ) -> glib::Propagation {
@@ -991,7 +1000,7 @@ fn set_visual(window: &gtk::ApplicationWindow, _screen: Option<&gtk::gdk::Screen
     }
 }
 
-fn build_system_menu(_application: &gtk::Application) {
+const fn build_system_menu(_application: &gtk::Application) {
     //let menu = gio::Menu::new();
     //let menu_bar = gio::Menu::new();
     //let more_menu = gio::Menu::new();
@@ -1062,19 +1071,21 @@ fn add_actions(
                 lck.set_size(&window);
                 if let Some(direction) = lck.rotate.next() {
                     let (mut x, mut y) = window.position();
+                    let (height, width) = (lck.height, lck.width);
+                    drop(lck);
                     if let Some(dir_x) = direction.0 {
                         if dir_x {
-                            x += lck.height;
+                            x += height;
                         } else {
-                            x = x.saturating_sub(lck.width);
+                            x = x.saturating_sub(width);
                             x = std::cmp::max(10, x);
                         }
                     }
                     if let Some(dir_y) = direction.1 {
                         if dir_y {
-                            y += lck.width;
+                            y += width;
                         } else {
-                            y = y.saturating_sub(lck.height);
+                            y = y.saturating_sub(height);
                             y = std::cmp::max(10, y);
                         }
                     }
@@ -1183,9 +1194,9 @@ fn add_actions(
     let move_right = gio::SimpleAction::new("move_right", None);
     move_right.connect_activate(glib::clone!(@weak window => move |_, _| {
         let rlr = _rlr.clone();
-        let lck = rlr.lock().unwrap();
+        let precision = rlr.lock().unwrap().precision;
         let (mut x, y) = window.position();
-        if !lck.precision {
+        if !precision {
             x += 1;
         } else {
             x += 10;
@@ -1198,9 +1209,9 @@ fn add_actions(
     let move_left = gio::SimpleAction::new("move_left", None);
     move_left.connect_activate(glib::clone!(@weak window => move |_, _| {
         let rlr = _rlr.clone();
-        let lck = rlr.lock().unwrap();
+        let precision = rlr.lock().unwrap().precision;
         let (mut x, y) = window.position();
-        if !lck.precision {
+        if !precision {
             x -= 1;
         } else {
             x -= 10;
@@ -1213,9 +1224,9 @@ fn add_actions(
     let move_up = gio::SimpleAction::new("move_up", None);
     move_up.connect_activate(glib::clone!(@weak window => move |_, _| {
         let rlr = _rlr.clone();
-        let lck = rlr.lock().unwrap();
+        let precision = rlr.lock().unwrap().precision;
         let (x, mut y) = window.position();
-        if !lck.precision {
+        if !precision {
             y -= 1;
         } else {
             y -= 10;
@@ -1226,9 +1237,9 @@ fn add_actions(
 
     let move_down = gio::SimpleAction::new("move_down", None);
     move_down.connect_activate(glib::clone!(@weak window => move |_, _| {
-        let lck = rlr.lock().unwrap();
+        let precision = rlr.lock().unwrap().precision;
         let (x, mut y) = window.position();
-        if !lck.precision {
+        if !precision {
             y += 1;
         } else {
             y += 10;
