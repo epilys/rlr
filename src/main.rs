@@ -1,23 +1,24 @@
-/*
- * rlr
- *
- * Copyright 2021 - Manos Pitsidianakis
- *
- * This file is part of rlr.
- *
- * rlr is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * rlr is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with rlr. If not, see <http://www.gnu.org/licenses/>.
- */
+//
+// rlr
+//
+// Copyright 2021 - Manos Pitsidianakis <manos@pitsidianak.is>
+//
+// This file is part of rlr.
+//
+// rlr is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// rlr is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with rlr. If not, see <http://www.gnu.org/licenses/>.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
     f64::consts::{FRAC_PI_2, PI},
@@ -33,32 +34,32 @@ use gtk::{
 
 include!("logo.xpm.rs");
 
-// Encode rotation state/angles around the starting left side as the origin
-// point:
-//
-//                   North
-//                    ^^^
-//                    |3|
-//                    |2|
-//               > |1|
-//              /     |0|      \
-//            -/      +-+       \
-//           /          .       v
-//       <--------+.........+-------->
-// West  < 3 2 1 0|     .   |0 1 2 3 > East
-//       <--------+     .   +-------->
-//                      .        /
-//             ^      +++      /-
-//              \     |0|     <
-//               \    |1|
-//                    |2|
-//                    |3|
-//                    vvv
-//
-//                    South
-//
-//
-#[derive(Debug, Copy, Clone)]
+/// Encode rotation state/angles around the starting left side as the origin
+/// point.
+///
+/// ```text
+///                   North
+///                    ^^^
+///                    |3|
+///                    |2|
+///               >    |1|
+///              /     |0|      \
+///            -/      +-+       \
+///           /          .       v
+///       <--------+.........+-------->
+/// West  < 3 2 1 0|     .   |0 1 2 3 > East
+///       <--------+     .   +-------->
+///                      .        /
+///             ^      +++      /-
+///              \     |0|     <
+///               \    |1|
+///                    |2|
+///                    |3|
+///                    vvv
+///
+///                    South
+/// ```
+#[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 enum Rotation {
     E = 0,
@@ -92,7 +93,7 @@ impl Rotation {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Clone, Copy, Debug)]
 enum Interval {
     None,
     Start(f64),
@@ -198,10 +199,7 @@ impl Rlr {
         cr.set_source_rgb(0.1, 0.1, 0.1);
         cr.set_line_width(1.);
 
-        //cr.rectangle(0.5, 0.5, length - 1.0, length - 1.0);
-        //cr.stroke().expect("Invalid cairo surface state");
-
-        /* Make concentric circles at distance `tick_size` */
+        // Make concentric circles at distance `tick_size`
         for i in 1..(length / 2.).floor() as i64 {
             let r = (i as f64) * tick_size * 10.;
             cr.arc(length / 2., length / 2., r, 0., 2. * std::f64::consts::PI);
@@ -211,7 +209,7 @@ impl Rlr {
             }
         }
 
-        /* Make circular angle ticks at the outmost circle */
+        // Make circular angle ticks at the outmost circle
         let mut a = 0.;
         while a <= (2. * PI) {
             let tick_size = if (a.abs() * (180. / PI)) % 30. <= 0.55 {
@@ -226,23 +224,23 @@ impl Rlr {
             cr.rotate(2. * PI - a - FRAC_PI_2);
             let cur = cr.current_point().unwrap();
             cr.move_to(cur.0 + length / 2. - 0.5 - tick_size, cur.1);
-            cr.line_to(cur.0 + length / 2. - 0.5, cur.1); //.+(xr*xr+yr*yr).sqrt());
+            cr.line_to(cur.0 + length / 2. - 0.5, cur.1);
             cr.stroke().expect("Invalid cairo surface state");
             cr.restore().unwrap();
             a += 0.01;
         }
 
-        /* Make 0 radian radius (offsetted by `self.angle_offset`) */
+        // Make 0 radian radius (offsetted by `self.angle_offset`)
         cr.save().unwrap();
         cr.set_line_width(2.);
         cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
         cr.rotate(2. * PI - FRAC_PI_2 - self.angle_offset);
         let cur = cr.current_point().unwrap();
-        cr.line_to(cur.0, cur.1 + length / 2. - 0.5); //.+(xr*xr+yr*yr).sqrt());
+        cr.line_to(cur.0, cur.1 + length / 2. - 0.5);
         cr.stroke().expect("Invalid cairo surface state");
         cr.restore().unwrap();
 
-        /* Draw radius tracking mouse position */
+        // Draw radius tracking mouse position
         cr.save().unwrap();
         let _angle = if self.precision {
             angle + FRAC_PI_2
@@ -253,17 +251,16 @@ impl Rlr {
         cr.rotate(2. * PI - _angle);
         let cur = cr.current_point().unwrap();
 
-        /* (Draw center point as a small circle ) */
+        // Draw center point as a small circle
         cr.arc(cur.0, cur.1, 2., 0., 2. * std::f64::consts::PI);
         cr.stroke().expect("Invalid cairo surface state");
         cr.move_to(cur.0, cur.1);
-        cr.line_to(cur.0, cur.1 + length / 2. - 0.5); //.+(xr*xr+yr*yr).sqrt());
+        cr.line_to(cur.0, cur.1 + length / 2. - 0.5);
         cr.stroke().expect("Invalid cairo surface state");
         cr.restore().unwrap();
         cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
-        //cr.set_font_size(0.35);
 
-        /* Draw arc signifying which angle is being measured */
+        // Draw arc signifying which angle is being measured
         cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
         let angle = if root_position.1 < 0. {
             (PI - angle.abs()) + PI - self.angle_offset
@@ -279,7 +276,7 @@ impl Rlr {
         );
         cr.stroke().expect("Invalid cairo surface state");
 
-        /* Show angle measurement as text */
+        // Show angle measurement as text
         cr.move_to(length / 2. - 5.5, length / 2. - 15.5);
         cr.show_text(&format!(
             " {:.2}rad {:.2}°",
@@ -293,16 +290,6 @@ impl Rlr {
 
     fn draw_rlr(&self, _drar: &DrawingArea, cr: &Context) -> glib::Propagation {
         let position = self.position;
-        /*
-        let root_window = drar
-        .display()
-        .device_manager()
-        .unwrap()
-        .client_pointer()
-        .unwrap()
-        .position();
-        std::dbg!(root_window);
-        */
         let length: f64 = self.width as f64;
         let height: f64 = self.height as f64;
         let breadth = if self.rotate.is_rotated() {
@@ -311,11 +298,6 @@ impl Rlr {
             self.height as f64
         };
 
-        //println!("Extents: {:?}", cr.fill_extents());
-
-        //cr.scale(500f64, 40f64);
-
-        //cr.set_source_rgb(250.0 / 255.0, 224.0 / 255.0, 55.0 / 255.0);
         cr.set_source_rgb(1., 1.0, 1.0);
         cr.paint().expect("Invalid cairo surface state");
 
@@ -428,7 +410,6 @@ impl Rlr {
             cr.set_source_rgb(0.1, 0.1, 0.1);
 
             cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
-            //cr.set_font_size(0.35);
 
             cr.move_to(breadth / 2. - extents.width() as f64 / 2., x);
             cr.show_text(&pos_label)
@@ -498,7 +479,6 @@ impl Rlr {
             cr.set_source_rgb(0.1, 0.1, 0.1);
 
             cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
-            //cr.set_font_size(0.35);
 
             cr.move_to(x, breadth / 2. + 2.5);
             cr.show_text(&pos_label)
@@ -608,8 +588,6 @@ where
                     }
                 }
             }
-            // we could return glib::ControlFlow::Continue(false) to stop our clock after
-            // this tick
             glib::ControlFlow::Continue
         };
 
@@ -619,6 +597,7 @@ where
 
     window.connect_enter_notify_event(enter_notify);
     window.connect_leave_notify_event(leave_notify);
+
     let _rlr = rlr.clone();
     window.connect_button_press_event(
         move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventButton| -> glib::Propagation {
@@ -662,7 +641,7 @@ where
               -> glib::Propagation {
             let rlr = _rlr.clone();
             let mut lck = rlr.lock().unwrap();
-            //println!("drag end");
+            // println!("drag end");
             if ev.button() == 1 {
                 lck.edit_angle_offset = false;
             }
@@ -672,7 +651,7 @@ where
     let _rlr = rlr.clone();
     window.connect_key_press_event(
         move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| -> glib::Propagation {
-            //println!("press {}", ev.keyval().name().unwrap().as_str());
+            // eprintln!("press {}", ev.keyval().name().unwrap().as_str());
             if ev
                 .keyval()
                 .name()
@@ -690,7 +669,7 @@ where
     let _rlr = rlr.clone();
     window.connect_key_release_event(
         move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| -> glib::Propagation {
-            //println!("release {}", ev.keyval().name().unwrap().as_str());
+            // eprintln!("release {}", ev.keyval().name().unwrap().as_str());
             if ev
                 .keyval()
                 .name()
@@ -736,8 +715,8 @@ where
     window.set_app_paintable(true); // crucial for transparency
     window.set_resizable(true);
     window.set_decorated(false);
-    //#[cfg(debug_assertions)]
-    //gtk::Window::set_interactive_debugging(true);
+    // #[cfg(debug_assertions)]
+    // gtk::Window::set_interactive_debugging(true);
 
     let drawing_area = DrawingArea::new();
 
@@ -765,7 +744,7 @@ where
             window.set_default_size(lck.width, lck.height);
             window.resize(lck.width, lck.height);
             window.queue_draw();
-            //println!("resized to {} {}", lck.width, lck.height);
+            // eprintln!("resized to {} {}", lck.width, lck.height);
         }
     }
 }
@@ -775,7 +754,6 @@ fn get_ppi(window: &gtk::ApplicationWindow) -> f64 {
     let monitor = display
         .monitor_at_window(&window.window().unwrap())
         .unwrap();
-    //let mon_num: i32 = screen.(&);
     let width_mm = monitor.width_mm() as f64;
     let height_mm = monitor.height_mm() as f64;
 
@@ -798,7 +776,7 @@ fn enter_notify(
     window: &gtk::ApplicationWindow,
     _crossing: &gtk::gdk::EventCrossing,
 ) -> glib::Propagation {
-    //println!("enter");
+    // eprintln!("enter");
     if let Some(screen) = window.window() {
         let display = screen.display();
         if let Some(gdk_window) = window.window() {
@@ -814,7 +792,7 @@ fn leave_notify(
     _application: &gtk::ApplicationWindow,
     _crossing: &gtk::gdk::EventCrossing,
 ) -> glib::Propagation {
-    //println!("leave");
+    // eprintln!("leave");
     glib::Propagation::Proceed
 }
 
@@ -884,6 +862,7 @@ fn add_actions(
         }
         window.queue_draw();
     }));
+
     let rotate = gio::SimpleAction::new("rotate", None);
     let _rlr = rlr.clone();
     rotate.connect_activate(glib::clone!(@weak window => move |_, _| {
@@ -1029,6 +1008,7 @@ fn add_actions(
         window.move_(x, y);
         window.queue_draw();
     }));
+
     let _rlr = rlr.clone();
     let move_left = gio::SimpleAction::new("move_left", None);
     move_left.connect_activate(glib::clone!(@weak window => move |_, _| {
@@ -1043,6 +1023,7 @@ fn add_actions(
         window.move_(x, y);
         window.queue_draw();
     }));
+
     let _rlr = rlr.clone();
     let move_up = gio::SimpleAction::new("move_up", None);
     move_up.connect_activate(glib::clone!(@weak window => move |_, _| {
@@ -1057,6 +1038,7 @@ fn add_actions(
         window.move_(x, y);
         window.queue_draw();
     }));
+
     let move_down = gio::SimpleAction::new("move_down", None);
     move_down.connect_activate(glib::clone!(@weak window => move |_, _| {
         let lck = rlr.lock().unwrap();
@@ -1069,8 +1051,10 @@ fn add_actions(
         window.move_(x, y);
         window.queue_draw();
     }));
+
     // We need to add all the actions to the application so they can be taken into
     // account.
+
     application.add_action(&move_right);
     application.add_action(&move_left);
     application.add_action(&move_up);
