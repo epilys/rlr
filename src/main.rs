@@ -19,23 +19,28 @@
  * along with rlr. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use gtk::prelude::*;
-use gtk::{gdk, gio, glib};
-use gtk::{AboutDialog, DrawingArea};
-use std::f64::consts::{FRAC_PI_2, PI};
-use std::sync::{Arc, Mutex};
+use std::{
+    f64::consts::{FRAC_PI_2, PI},
+    sync::{Arc, Mutex},
+};
 
-use gtk::cairo::{Context, FontSlant, FontWeight};
+use gtk::{
+    cairo::{Context, FontSlant, FontWeight},
+    gdk, gio, glib,
+    prelude::*,
+    AboutDialog, DrawingArea,
+};
 
 include!("logo.xpm.rs");
 
-// Encode rotation state/angles around the starting left side as the origin point:
+// Encode rotation state/angles around the starting left side as the origin
+// point:
 //
 //                   North
 //                    ^^^
 //                    |3|
 //                    |2|
-//               >    |1|
+//               > |1|
 //              /     |0|      \
 //            -/      +-+       \
 //           /          .       v
@@ -603,7 +608,8 @@ where
                     }
                 }
             }
-            // we could return glib::ControlFlow::Continue(false) to stop our clock after this tick
+            // we could return glib::ControlFlow::Continue(false) to stop our clock after
+            // this tick
             glib::ControlFlow::Continue
         };
 
@@ -828,8 +834,9 @@ fn build_system_menu(_application: &gtk::Application) {
     //let settings_menu = gio::Menu::new();
     //let submenu = gio::Menu::new();
 
-    //// The first argument is the label of the menu item whereas the second is the action name. It'll
-    //// makes more sense when you'll be reading the "add_actions" function.
+    //// The first argument is the label of the menu item whereas the second is
+    //// the action name. It'll makes more sense when you'll be reading the
+    //// "add_actions" function.
     //menu.append(Some("Quit"), Some("app.quit"));
 
     //switch_menu.append(Some("Switch"), Some("app.switch"));
@@ -848,7 +855,8 @@ fn build_system_menu(_application: &gtk::Application) {
     //application.set_menubar(Some(&menu_bar));
 }
 
-/// This function creates "actions" which connect on the declared actions from the menu items.
+/// This function creates "actions" which connect on the declared actions from
+/// the menu items.
 fn add_actions(
     application: &gtk::Application,
     window: &gtk::ApplicationWindow,
@@ -1061,7 +1069,8 @@ fn add_actions(
         window.move_(x, y);
         window.queue_draw();
     }));
-    // We need to add all the actions to the application so they can be taken into account.
+    // We need to add all the actions to the application so they can be taken into
+    // account.
     application.add_action(&move_right);
     application.add_action(&move_left);
     application.add_action(&move_up);
