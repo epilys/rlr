@@ -56,7 +56,12 @@
     clippy::manual_hash_one,
     clippy::into_iter_without_iter,
 )]
-#![allow(clippy::imprecise_flops, clippy::suboptimal_flops)]
+#![allow(
+    // allow redundant_static_lifetimes to be able to compile from Rust version 1.70.0
+    clippy::redundant_static_lifetimes,
+    clippy::imprecise_flops,
+    clippy::suboptimal_flops,
+)]
 use std::{
     f64::consts::{FRAC_PI_2, PI},
     io::Write,
@@ -72,7 +77,7 @@ use gtk::{
     AboutDialog, DrawingArea,
 };
 
-const APP_ID: &str = "com.github.epilys.rlr";
+const APP_ID: &'static str = "com.github.epilys.rlr";
 
 trait CairoContextExt {
     fn set_primary_color(&self, settings: &Settings);
@@ -99,7 +104,8 @@ impl CairoContextExt for Context {
     }
 }
 
-const GSCHEMA_XML: &str = include_str!("../data/com.github.epilys.rlr.Settings.gschema.xml");
+const GSCHEMA_XML: &'static str =
+    include_str!("../data/com.github.epilys.rlr.Settings.gschema.xml");
 
 include!("logo.xpm.rs");
 
@@ -196,10 +202,10 @@ impl Default for Settings {
 }
 
 impl Settings {
-    const PRIMARY_COLOR: &str = "primary-color";
-    const SECONDARY_COLOR: &str = "secondary-color";
-    const WINDOW_OPACITY: &str = "window-opacity";
-    const ALL_KEYS: &[(&str, &glib::VariantTy)] = &[
+    const PRIMARY_COLOR: &'static str = "primary-color";
+    const SECONDARY_COLOR: &'static str = "secondary-color";
+    const WINDOW_OPACITY: &'static str = "window-opacity";
+    const ALL_KEYS: &'static [(&'static str, &'static glib::VariantTy)] = &[
         (Self::PRIMARY_COLOR, glib::VariantTy::STRING),
         (Self::SECONDARY_COLOR, glib::VariantTy::STRING),
         (Self::WINDOW_OPACITY, glib::VariantTy::DOUBLE),
