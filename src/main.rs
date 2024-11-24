@@ -313,7 +313,7 @@ struct Rlr {
     angle_offset: f64,
     interval: Interval,
     ppi: f64,
-    scale_factor: f64,
+    scale_factor: i32,
     settings: Settings,
 }
 
@@ -340,7 +340,7 @@ impl Default for Rlr {
             angle_offset: 0.,
             interval: Interval::None,
             ppi: 72.,
-            scale_factor: 1.0,
+            scale_factor: 1,
             settings,
         }
     }
@@ -348,7 +348,7 @@ impl Default for Rlr {
 
 fn draw_rlr(rlr: Rc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> glib::Propagation {
     let lck = rlr.lock().unwrap();
-    cr.set_font_size(8. * lck.ppi / 72.);
+    cr.set_font_size((8.0 / f64::from(lck.scale_factor)) * lck.ppi / 72.);
     if lck.protractor {
         return lck.draw_douglas(drar, cr);
     }
@@ -593,7 +593,7 @@ impl Rlr {
                 cr.stroke().expect("Invalid cairo surface state");
                 if i % 50 == 0 {
                     cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
-                    let label = format!("{}", (f64::from(i) * self.scale_factor).floor());
+                    let label = format!("{}", i * self.scale_factor);
                     let extents = cr
                         .text_extents(&label)
                         .expect("Invalid cairo surface state");
@@ -611,7 +611,7 @@ impl Rlr {
             cr.move_to(1.0, x);
             cr.line_to(breadth, x);
             cr.stroke().expect("Invalid cairo surface state");
-            let pos_label = format!("{}px", pos * self.scale_factor);
+            let pos_label = format!("{}px", pos * f64::from(self.scale_factor));
             let extents = cr
                 .text_extents(&pos_label)
                 .expect("Invalid cairo surface state");
@@ -660,7 +660,7 @@ impl Rlr {
                 cr.stroke().expect("Invalid cairo surface state");
                 if i % 50 == 0 {
                     cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
-                    let label = format!("{}", (f64::from(i) * self.scale_factor).floor());
+                    let label = format!("{}", i * self.scale_factor);
                     let extents = cr
                         .text_extents(&label)
                         .expect("Invalid cairo surface state");
@@ -679,7 +679,7 @@ impl Rlr {
             cr.line_to(x - 2., breadth);
             cr.stroke().expect("Invalid cairo surface state");
 
-            let pos_label = format!("{}px", pos * self.scale_factor);
+            let pos_label = format!("{}px", pos * f64::from(self.scale_factor));
             let extents = cr
                 .text_extents(&pos_label)
                 .expect("Invalid cairo surface state");
@@ -1068,8 +1068,8 @@ where
         if ppi > 72. {
             lck.ppi = ppi;
             lck.scale_factor = scale_factor;
-            lck.width += lck.width / 2;
-            lck.height += lck.height / 2;
+            lck.width += (scale_factor * lck.width) / 2;
+            lck.height += (scale_factor * lck.height) / 2;
             window.set_default_size(lck.width, lck.height);
             window.resize(lck.width, lck.height);
             window.queue_draw();
@@ -1080,20 +1080,20 @@ where
     }
 }
 
-fn get_ppi_and_scale_factor(window: &gtk::ApplicationWindow) -> (f64, f64) {
+fn get_ppi_and_scale_factor(window: &gtk::ApplicationWindow) -> (f64, i32) {
     const INCH: f64 = 0.0393701;
 
     let display = window.display();
     let monitor = display
         .monitor_at_window(&window.window().unwrap())
         .unwrap();
-    let scale_factor = f64::from(monitor.scale_factor());
+    let scale_factor = monitor.scale_factor();
     let width_mm = f64::from(monitor.width_mm());
     let height_mm = f64::from(monitor.height_mm());
 
     let rectangle = monitor.geometry();
-    let width = scale_factor * f64::from(rectangle.width());
-    let height = scale_factor * f64::from(rectangle.height());
+    let width = f64::from(scale_factor) * f64::from(rectangle.width());
+    let height = f64::from(scale_factor) * f64::from(rectangle.height());
     let diag = (width_mm * width_mm + height_mm * height_mm).sqrt() * INCH;
 
     (
