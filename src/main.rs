@@ -210,24 +210,29 @@ impl Rlr {
         }
 
         // Make circular angle ticks at the outmost circle
-        let mut a = 0.;
-        while a <= (2. * PI) {
-            let tick_size = if (a.abs() * (180. / PI)) % 30. <= 0.55 {
-                5.0 * tick_size
-            } else if (a.abs() * (180. / PI)) % 5. <= 0.5 {
-                1.5 * tick_size
-            } else {
-                tick_size
-            };
-            cr.save().unwrap();
-            cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
-            cr.rotate(2. * PI - a - FRAC_PI_2);
-            let cur = cr.current_point().unwrap();
-            cr.move_to(cur.0 + length / 2. - 0.5 - tick_size, cur.1);
-            cr.line_to(cur.0 + length / 2. - 0.5, cur.1);
-            cr.stroke().expect("Invalid cairo surface state");
-            cr.restore().unwrap();
-            a += 0.01;
+        for quadrant in 0..4 {
+            let mut a: u64 = 0;
+            // π * 0.5 == 1.57079...
+            while a <= 157 {
+                let tick_size = if ((a as f64) * (1.8 / PI)) % 30. <= 0.55 {
+                    5.0 * tick_size
+                } else if ((a as f64) * (1.8 / PI)) % 5. <= 0.5 {
+                    1.5 * tick_size
+                } else {
+                    tick_size
+                };
+                cr.save().unwrap();
+                cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
+                // cr.rotate(1.5 * PI + (quadrant as f64) * FRAC_PI_2);
+                cr.rotate((quadrant as f64) * FRAC_PI_2);
+                cr.rotate(-(a as f64 / 100.0));
+                let cur = cr.current_point().unwrap();
+                cr.move_to(cur.0 + length / 2. - 0.5 - tick_size, cur.1 - 0.5);
+                cr.line_to(cur.0 + length / 2. - 0.5, cur.1 - 0.5);
+                cr.stroke().expect("Invalid cairo surface state");
+                cr.restore().unwrap();
+                a += 1;
+            }
         }
 
         // Make 0 radian radius (offsetted by `self.angle_offset`)
