@@ -20,6 +20,43 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#![deny(
+    rustdoc::redundant_explicit_links,
+    unsafe_op_in_unsafe_fn,
+    /* groups */
+    clippy::correctness,
+    clippy::suspicious,
+    clippy::complexity,
+    clippy::perf,
+    clippy::cargo,
+    clippy::nursery,
+    clippy::style,
+    /* restriction */
+    clippy::dbg_macro,
+    clippy::rc_buffer,
+    clippy::as_underscore,
+    clippy::assertions_on_result_states,
+    /* rustdoc */
+    rustdoc::broken_intra_doc_links,
+    /* pedantic */
+    clippy::cast_lossless,
+    clippy::cast_possible_wrap,
+    clippy::ptr_as_ptr,
+    clippy::doc_markdown,
+    clippy::expect_fun_call,
+    clippy::or_fun_call,
+    clippy::bool_to_int_with_if,
+    clippy::borrow_as_ptr,
+    clippy::cast_ptr_alignment,
+    clippy::large_futures,
+    clippy::waker_clone_wake,
+    clippy::unused_enumerate_index,
+    clippy::unnecessary_fallible_conversions,
+    clippy::struct_field_names,
+    clippy::manual_hash_one,
+    clippy::into_iter_without_iter,
+)]
+#![allow(clippy::imprecise_flops, clippy::suboptimal_flops)]
 use std::{
     f64::consts::{FRAC_PI_2, PI},
     rc::Rc,
