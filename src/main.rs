@@ -196,8 +196,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             obj: None,
-            primary_color: gdk::RGBA::BLACK,
-            secondary_color: gdk::RGBA::WHITE,
+            primary_color: gdk::RGBA::parse("#453c0f").unwrap(),
+            secondary_color: gdk::RGBA::parse("#f6d32d").unwrap(),
             window_opacity: 0.8,
             font_size_factor: 1.0,
             changed_signal_id: None,
@@ -839,6 +839,7 @@ fn run_app() -> Option<i32> {
         application.set_accels_for_action("app.increase_font_size", &["<Primary>plus"]);
         application.set_accels_for_action("app.decrease_font_size", &["<Primary>minus"]);
         application.set_accels_for_action("app.about", &["question", "F1"]);
+        application.set_accels_for_action("app.settings", &["s", "F2"]);
         application
             .set_accels_for_action("app.move_right", &["Right", "<Primary>Right", "rightarrow"]);
         application.set_accels_for_action("app.move_left", &["Left", "<Primary>Left", "leftarrow"]);
@@ -1320,6 +1321,172 @@ fn add_actions(
 "));
         p.show_all();
     }));
+    let settings = gio::SimpleAction::new("settings", None);
+
+    settings.connect_activate(
+        glib::clone!(@weak application, @weak window, @strong rlr => move |_, _| {
+            let listbox = gtk::ListBox::builder()
+                .visible(true)
+                .sensitive(true)
+                .can_focus(true)
+                .expand(true)
+                .build();
+            let d = gtk::Dialog::builder()
+                //.attached_to(&window)
+                .application(&application)
+                .title("rlr Settings")
+                .has_focus(true)
+                .can_focus(true)
+                .sensitive(true)
+                .border_width(15)
+                .resizable(false)
+                .transient_for(&window)
+                .type_(gtk::WindowType::Toplevel)
+                .type_hint(gdk::WindowTypeHint::Dialog)
+                .build();
+            // listbox.add(&gtk::Label::new(Some("Settings")));
+            // d.content_area()
+            let opacity_adj = gtk::Adjustment::new(0.0, 0.01, 1.0, 0.05, 0.1, 0.1);
+            let font_size_adj = gtk::Adjustment::new(0.0, 0.1, 10.0, 0.05, 0.1, 0.1);
+            let opacity_row = gtk::FlowBox::builder()
+                .orientation(gtk::Orientation::Horizontal)
+                .can_focus(true)
+                .sensitive(true)
+                .homogeneous(true)
+                .expand(true)
+                .visible(true)
+                .max_children_per_line(2)
+                .build();
+            opacity_row.insert(&gtk::Label::new(Some("Opacity")), 0);
+            opacity_row.insert(
+                &gtk::Scale::builder()
+                .can_focus(true)
+                .sensitive(true)
+                .visible(true)
+                .digits(3)
+                .adjustment(&opacity_adj)
+                .expand(true)
+                .build(),
+                1,
+            );
+            let font_size_row = gtk::FlowBox::builder()
+                .orientation(gtk::Orientation::Horizontal)
+                .can_focus(true)
+                .sensitive(true)
+                .homogeneous(true)
+                .expand(true)
+                .visible(true)
+                .max_children_per_line(2)
+                .build();
+            font_size_row.insert(&gtk::Label::new(Some("Font size factor")), 0);
+            font_size_row.insert(
+                &gtk::Scale::builder()
+                .can_focus(true)
+                .sensitive(true)
+                .visible(true)
+                .digits(3)
+                .adjustment(&font_size_adj)
+                .expand(true)
+                .build(),
+                1,
+            );
+            let primary_color_chooser = gtk::ColorButton::new();
+            primary_color_chooser.set_expand(true);
+            primary_color_chooser.set_use_alpha(true);
+            let secondary_color_chooser = gtk::ColorButton::new();
+            secondary_color_chooser.set_expand(true);
+            secondary_color_chooser.set_use_alpha(true);
+            {
+                let lck = rlr.lock().unwrap();
+                primary_color_chooser.set_rgba(&lck.settings.primary_color);
+                secondary_color_chooser.set_rgba(&lck.settings.secondary_color);
+                let gsettings_obj = lck.settings.obj.as_ref().unwrap().clone();
+                drop(lck);
+                gsettings_obj
+                    .bind(Settings::WINDOW_OPACITY, &opacity_adj, "value")
+                    .build();
+                gsettings_obj
+                    .bind(Settings::FONT_SIZE_FACTOR, &font_size_adj, "value")
+                    .build();
+                gsettings_obj
+                    .bind(Settings::PRIMARY_COLOR, &primary_color_chooser, "rgba")
+                    .mapping(|var, _| {
+                        let hash: String = var.get()?;
+                        let val: gdk::RGBA = gdk::RGBA::parse(&hash).ok()?;
+                        Some(val.into())
+                    })
+                .set_mapping(|var, _| {
+                    let val: gdk::RGBA = var.get().ok()?;
+                    Some(val.to_str().to_string().into())
+                })
+                .build();
+                gsettings_obj
+                    .bind(Settings::SECONDARY_COLOR, &secondary_color_chooser, "rgba")
+                    .mapping(|var, _| {
+                        let hash: String = var.get()?;
+                        let val: gdk::RGBA = gdk::RGBA::parse(&hash).ok()?;
+                        Some(val.into())
+                    })
+                .set_mapping(|var, _| {
+                    let val: gdk::RGBA = var.get().ok()?;
+                    Some(val.to_str().to_string().into())
+                })
+                .build();
+            }
+            listbox.add(&opacity_row);
+            listbox.add(&font_size_row);
+            let primary_color_row = gtk::FlowBox::builder()
+                .orientation(gtk::Orientation::Horizontal)
+                .can_focus(true)
+                .sensitive(true)
+                .homogeneous(true)
+                .expand(true)
+                .visible(true)
+                .max_children_per_line(2)
+                .build();
+            primary_color_row.insert(&gtk::Label::new(Some("Primary colour")), 0);
+            primary_color_row.insert(&primary_color_chooser, 1);
+            listbox.add(&primary_color_row);
+            let secondary_color_row = gtk::FlowBox::builder()
+                .orientation(gtk::Orientation::Horizontal)
+                .can_focus(true)
+                .sensitive(true)
+                .homogeneous(true)
+                .expand(true)
+                .visible(true)
+                .max_children_per_line(2)
+                .build();
+            secondary_color_row.insert(&gtk::Label::new(Some("Secondary colour")), 0);
+            secondary_color_row.insert(&secondary_color_chooser, 1);
+            listbox.add(&secondary_color_row);
+            d.content_area().add(&listbox);
+            d.content_area().set_visible(true);
+            d.content_area().set_can_focus(true);
+            d.add_button("Restore defaults", gtk::ResponseType::Reject);
+            d.add_button("Close", gtk::ResponseType::Close);
+            d.connect_response(
+                glib::clone!(@weak window, @strong rlr => move |self_, response: gtk::ResponseType| {
+                    match response {
+                        gtk::ResponseType::Reject => {
+                            let mut lck = rlr.lock().unwrap();
+                            lck.settings = Settings {
+                                obj: lck.settings.obj.take(),
+                                changed_signal_id: lck.settings.changed_signal_id.take(),
+                                ..Settings::default()
+                            };
+                            lck.settings.sync_write();
+                            drop(lck);
+                            window.queue_draw();
+                        },
+                        gtk::ResponseType::Close => self_.emit_close(),
+                        _ => {},
+                    }
+                }),
+            );
+
+            d.show_all();
+        }),
+    );
 
     let _rlr = rlr.clone();
     let increase = gio::SimpleAction::new("increase", None);
@@ -1458,5 +1625,6 @@ fn add_actions(
     application.add_action(&rotate);
     application.add_action(&flip);
     application.add_action(&about);
+    application.add_action(&settings);
     application.add_action(&quit);
 }
