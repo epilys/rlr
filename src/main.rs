@@ -189,6 +189,7 @@ struct Settings {
     secondary_color: gdk::RGBA,
     window_opacity: f64,
     font_size_factor: f64,
+    changed_signal_id: Option<glib::signal::SignalHandlerId>,
 }
 
 impl Default for Settings {
@@ -199,6 +200,7 @@ impl Default for Settings {
             secondary_color: gdk::RGBA::WHITE,
             window_opacity: 0.8,
             font_size_factor: 1.0,
+            changed_signal_id: None,
         }
     }
 }
@@ -264,17 +266,18 @@ impl Settings {
         let mut retval = Self::default();
         let settings = gio::Settings::new(APP_ID);
         retval.obj = Some(settings);
-        retval.sync();
+        retval.sync_read();
         Ok(retval)
     }
 
-    fn sync(&mut self) {
+    fn sync_read(&mut self) {
         let Self {
             obj: Some(ref obj),
             ref mut primary_color,
             ref mut secondary_color,
             ref mut window_opacity,
             ref mut font_size_factor,
+            changed_signal_id: _,
         } = self
         else {
             return;
@@ -301,6 +304,31 @@ impl Settings {
         }
         *window_opacity = obj.get::<f64>(Self::WINDOW_OPACITY).clamp(0.01, 1.0);
         *font_size_factor = obj.get::<f64>(Self::FONT_SIZE_FACTOR).clamp(0.1, 10.0);
+    }
+
+    fn sync_write(&self) {
+        let Self {
+            obj: Some(ref obj),
+            ref primary_color,
+            ref secondary_color,
+            ref window_opacity,
+            ref font_size_factor,
+            ref changed_signal_id,
+        } = self
+        else {
+            return;
+        };
+        if let Some(sid) = changed_signal_id.as_ref() {
+            obj.block_signal(sid);
+        }
+        _ = obj.set(Self::PRIMARY_COLOR, primary_color.to_str().as_str());
+        _ = obj.set(Self::SECONDARY_COLOR, secondary_color.to_str().as_str());
+        _ = obj.set(Self::WINDOW_OPACITY, *window_opacity);
+        _ = obj.set(Self::FONT_SIZE_FACTOR, *font_size_factor);
+        gio::Settings::sync();
+        if let Some(sid) = changed_signal_id.as_ref() {
+            obj.unblock_signal(sid);
+        }
     }
 }
 
@@ -859,20 +887,20 @@ where
 
     {
         let rlr2 = rlr.clone();
-        let lck = rlr.lock().unwrap();
+        let mut lck = rlr.lock().unwrap();
         let window = window.clone();
-        if let Some(obj) = lck.settings.obj.as_ref() {
+        lck.settings.changed_signal_id = lck.settings.obj.as_ref().map(|obj| {
             obj.connect_changed(None, move |_self: &gio::Settings, key: &str| {
                 let rlr = rlr2.clone();
                 let mut lck = rlr.lock().unwrap();
-                lck.settings.sync();
+                lck.settings.sync_read();
                 if key == Settings::WINDOW_OPACITY {
                     window.set_opacity(lck.settings.window_opacity);
                 }
                 drop(lck);
                 window.queue_draw();
-            });
-        }
+            })
+        });
     }
     window.connect_screen_changed(set_visual);
     {
@@ -1341,6 +1369,7 @@ fn add_actions(
             let mut lck = _rlr.lock().unwrap();
             lck.settings.font_size_factor += 0.05;
             lck.settings.font_size_factor = lck.settings.font_size_factor.clamp(0.1, 10.0);
+            lck.settings.sync_write();
         }
         window.queue_draw();
     }));
@@ -1351,6 +1380,7 @@ fn add_actions(
             let mut lck = _rlr.lock().unwrap();
             lck.settings.font_size_factor -= 0.05;
             lck.settings.font_size_factor = lck.settings.font_size_factor.clamp(0.1, 10.0);
+            lck.settings.sync_write();
         }
         window.queue_draw();
     }));
