@@ -103,7 +103,7 @@ enum Interval {
 impl Interval {
     #[inline(always)]
     fn is_start(&self) -> bool {
-        matches!(self, Interval::Start(_))
+        matches!(self, Self::Start(_))
     }
 }
 
@@ -126,7 +126,7 @@ struct Rlr {
 
 impl Default for Rlr {
     fn default() -> Self {
-        Rlr {
+        Self {
             position: (0., 0.),
             root_position: (0, 0),
             width: 500,
@@ -154,7 +154,7 @@ fn draw_rlr(rlr: Arc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> glib::Pro
 }
 
 impl Rlr {
-    fn set_size(&mut self, window: &gtk::ApplicationWindow) {
+    fn set_size(&self, window: &gtk::ApplicationWindow) {
         if self.protractor {
             let max = std::cmp::max(self.width, self.height);
             window.resize(max, max);
@@ -416,7 +416,6 @@ impl Rlr {
                 .expect("Invalid cairo surface state");
 
             cr.rectangle(0.5, 0.5, length - 1.0, height - 1.0);
-            cr.stroke().expect("Invalid cairo surface state");
         } else {
             while i < self.width {
                 x = (i as f64).floor() + 0.5;
@@ -485,8 +484,8 @@ impl Rlr {
                 .expect("Invalid cairo surface state");
 
             cr.rectangle(0.5, 0.5, length - 1.0, breadth - 1.0);
-            cr.stroke().expect("Invalid cairo surface state");
         }
+        cr.stroke().expect("Invalid cairo surface state");
 
         glib::Propagation::Proceed
     }
@@ -622,9 +621,9 @@ where
                 lck.edit_angle_offset = true;
             } else if ev.button() == 1 {
                 window.begin_move_drag(
-                    ev.button() as _,
-                    ev.root().0 as _,
-                    ev.root().1 as _,
+                    ev.button() as i32,
+                    ev.root().0 as i32,
+                    ev.root().1 as i32,
                     ev.time(),
                 );
             }
@@ -959,12 +958,11 @@ fn add_actions(
                 } else {
                     lck.width += 50;
                 }
-                lck.set_size(&window);
             } else {
                 lck.width += 50;
                 lck.height = lck.width;
-                lck.set_size(&window);
             }
+            lck.set_size(&window);
         }
         window.queue_draw();
     }));
@@ -981,13 +979,12 @@ fn add_actions(
                     lck.width -= 50;
                     lck.width = std::cmp::max(50, lck.width);
                 }
-                lck.set_size(&window);
             } else {
                 lck.width -= 50;
                 lck.width = std::cmp::max(50, lck.width);
                 lck.height = lck.width;
-                lck.set_size(&window);
             }
+            lck.set_size(&window);
         }
         window.queue_draw();
     }));

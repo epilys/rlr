@@ -7,6 +7,7 @@ license = "GPL-3.0-or-later"
 description = "pixel screen ruler"
 repository = "https://github.com/epilys/rlr"
 homepage = "https://github.com/epilys/rlr"
+categories = ["graphics"]
 keywords = ["pixel", "pixels", "monitor", "display", "ruler", "screen"]
 
 [dependencies]
