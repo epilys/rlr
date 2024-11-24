@@ -138,7 +138,7 @@ impl Default for Rlr {
     }
 }
 
-fn draw_rlr(rlr: Arc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> Inhibit {
+fn draw_rlr(rlr: Arc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> glib::Propagation {
     let lck = rlr.lock().unwrap();
     cr.set_font_size(8. * lck.ppi / 72.);
     if lck.protractor {
@@ -169,7 +169,7 @@ impl Rlr {
         }
     }
 
-    fn draw_douglas(&self, _drar: &DrawingArea, cr: &Context) -> Inhibit {
+    fn draw_douglas(&self, _drar: &DrawingArea, cr: &Context) -> glib::Propagation {
         let length: f64 = std::cmp::min(self.width, self.height) as f64;
         let root_position = self.root_position;
         let root_position = (
@@ -283,10 +283,10 @@ impl Rlr {
         ))
         .expect("Invalid cairo surface state");
 
-        Inhibit(false)
+        glib::Propagation::Proceed
     }
 
-    fn draw_rlr(&self, _drar: &DrawingArea, cr: &Context) -> Inhibit {
+    fn draw_rlr(&self, _drar: &DrawingArea, cr: &Context) -> glib::Propagation {
         let position = self.position;
         /*
         let root_window = drar
@@ -387,7 +387,7 @@ impl Rlr {
                     let extents = cr
                         .text_extents(&label)
                         .expect("Invalid cairo surface state");
-                    cr.move_to(breadth / 2. - 2.5 - extents.width as f64 / 2., x);
+                    cr.move_to(breadth / 2. - 2.5 - extents.width() as f64 / 2., x);
                     cr.show_text(&label).expect("Invalid cairo surface state");
                 }
                 i += 2;
@@ -406,17 +406,17 @@ impl Rlr {
                 .text_extents(&pos_label)
                 .expect("Invalid cairo surface state");
             cr.rectangle(
-                breadth / 2. - extents.width as f64 / 2. - 2.,
-                x - extents.height as f64 - 2.,
-                extents.width as f64 + 6.5,
-                extents.height as f64 + 6.5,
+                breadth / 2. - extents.width() as f64 / 2. - 2.,
+                x - extents.height() as f64 - 2.,
+                extents.width() as f64 + 6.5,
+                extents.height() as f64 + 6.5,
             );
             cr.stroke().expect("Invalid cairo surface state");
             cr.rectangle(
-                breadth / 2. - extents.width as f64 / 2.,
-                x - extents.height as f64,
-                extents.width as f64 + 4.5,
-                extents.height as f64 + 4.5,
+                breadth / 2. - extents.width() as f64 / 2.,
+                x - extents.height() as f64,
+                extents.width() as f64 + 4.5,
+                extents.height() as f64 + 4.5,
             );
             cr.set_source_rgb(1.0, 1.0, 1.0);
             cr.fill().expect("Invalid cairo surface state");
@@ -425,7 +425,7 @@ impl Rlr {
             cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
             //cr.set_font_size(0.35);
 
-            cr.move_to(breadth / 2. - extents.width as f64 / 2., x);
+            cr.move_to(breadth / 2. - extents.width() as f64 / 2., x);
             cr.show_text(&pos_label)
                 .expect("Invalid cairo surface state");
 
@@ -456,7 +456,7 @@ impl Rlr {
                     let extents = cr
                         .text_extents(&label)
                         .expect("Invalid cairo surface state");
-                    cr.move_to(x - extents.width as f64 / 2., breadth / 2. + 2.5);
+                    cr.move_to(x - extents.width() as f64 / 2., breadth / 2. + 2.5);
                     cr.show_text(&label).expect("Invalid cairo surface state");
                 }
                 i += 2;
@@ -477,16 +477,16 @@ impl Rlr {
                 .expect("Invalid cairo surface state");
             cr.rectangle(
                 x - 2.,
-                breadth / 2. - extents.height as f64 - 2.,
-                extents.width as f64 + 6.5,
-                extents.height as f64 + 10.5,
+                breadth / 2. - extents.height() as f64 - 2.,
+                extents.width() as f64 + 6.5,
+                extents.height() as f64 + 10.5,
             );
             cr.stroke().expect("Invalid cairo surface state");
             cr.rectangle(
                 x,
-                breadth / 2. - extents.height as f64,
-                extents.width as f64 + 4.5,
-                extents.height as f64 + 8.5,
+                breadth / 2. - extents.height() as f64,
+                extents.width() as f64 + 4.5,
+                extents.height() as f64 + 8.5,
             );
             cr.set_source_rgb(1.0, 1.0, 1.0);
             cr.fill().expect("Invalid cairo surface state");
@@ -503,7 +503,7 @@ impl Rlr {
             cr.stroke().expect("Invalid cairo surface state");
         }
 
-        Inhibit(false)
+        glib::Propagation::Proceed
     }
 }
 
@@ -537,7 +537,7 @@ fn main() {
         drawable(
             application,
             _rlr,
-            move |drar: &DrawingArea, cr: &Context| -> Inhibit {
+            move |drar: &DrawingArea, cr: &Context| -> glib::Propagation {
                 let _rlr = _rlr2.clone();
                 draw_rlr(_rlr, drar, cr)
             },
@@ -549,13 +549,13 @@ fn main() {
 
 fn drawable<F>(application: &gtk::Application, rlr: Arc<Mutex<Rlr>>, draw_fn: F)
 where
-    F: Fn(&DrawingArea, &Context) -> Inhibit + 'static,
+    F: Fn(&DrawingArea, &Context) -> glib::Propagation + 'static,
 {
     let window = gtk::ApplicationWindow::builder()
         .application(application)
         .events(gdk::EventMask::POINTER_MOTION_MASK)
         .build();
-    window.set_icon(Some(&gtk::gdk_pixbuf::Pixbuf::from_xpm_data(ICON)));
+    window.set_icon(Some(&gtk::gdk_pixbuf::Pixbuf::from_xpm_data(ICON).unwrap()));
 
     set_visual(&window, None);
 
@@ -566,17 +566,18 @@ where
         let tick = move || {
             let mut lck = rlr.lock().unwrap();
             if lck.edit_angle_offset || lck.freeze {
-                return glib::Continue(true);
+                return glib::ControlFlow::Continue;
             }
             if let Some(screen) = window.window() {
                 let root_origin = screen.root_origin();
-                let display = screen.display();
-                let (_, x, y) = display
-                    .device_manager()
-                    .unwrap()
-                    .client_pointer()
-                    .unwrap()
-                    .position();
+                let Some(device) = screen
+                    .display()
+                    .default_seat()
+                    .and_then(|seat| seat.pointer())
+                else {
+                    return glib::ControlFlow::Continue;
+                };
+                let (_, x, y) = device.position();
                 let root_position = (x - root_origin.0, y - root_origin.1);
 
                 if root_position != lck.root_position {
@@ -602,8 +603,8 @@ where
                     }
                 }
             }
-            // we could return glib::Continue(false) to stop our clock after this tick
-            glib::Continue(true)
+            // we could return glib::ControlFlow::Continue(false) to stop our clock after this tick
+            glib::ControlFlow::Continue
         };
 
         // executes the closure once every second
@@ -614,7 +615,7 @@ where
     window.connect_leave_notify_event(leave_notify);
     let _rlr = rlr.clone();
     window.connect_button_press_event(
-        move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventButton| -> Inhibit {
+        move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventButton| -> glib::Propagation {
             let rlr = _rlr.clone();
             let mut lck = rlr.lock().unwrap();
 
@@ -645,24 +646,26 @@ where
                     ev.time(),
                 );
             }
-            Inhibit(false)
+            glib::Propagation::Proceed
         },
     );
     let _rlr = rlr.clone();
     window.connect_button_release_event(
-        move |_application: &gtk::ApplicationWindow, ev: &gtk::gdk::EventButton| -> Inhibit {
+        move |_application: &gtk::ApplicationWindow,
+              ev: &gtk::gdk::EventButton|
+              -> glib::Propagation {
             let rlr = _rlr.clone();
             let mut lck = rlr.lock().unwrap();
             //println!("drag end");
             if ev.button() == 1 {
                 lck.edit_angle_offset = false;
             }
-            Inhibit(false)
+            glib::Propagation::Proceed
         },
     );
     let _rlr = rlr.clone();
     window.connect_key_press_event(
-        move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| -> Inhibit {
+        move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| -> glib::Propagation {
             //println!("press {}", ev.keyval().name().unwrap().as_str());
             if ev
                 .keyval()
@@ -675,12 +678,12 @@ where
                 lck.precision = false;
                 window.queue_draw();
             }
-            Inhibit(false)
+            glib::Propagation::Proceed
         },
     );
     let _rlr = rlr.clone();
     window.connect_key_release_event(
-        move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| -> Inhibit {
+        move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| -> glib::Propagation {
             //println!("release {}", ev.keyval().name().unwrap().as_str());
             if ev
                 .keyval()
@@ -693,12 +696,12 @@ where
                 lck.precision = true;
                 window.queue_draw();
             }
-            Inhibit(false)
+            glib::Propagation::Proceed
         },
     );
     let _rlr = rlr.clone();
     window.connect_motion_notify_event(
-        move |window: &gtk::ApplicationWindow, motion: &gdk::EventMotion| -> Inhibit {
+        move |window: &gtk::ApplicationWindow, motion: &gdk::EventMotion| -> glib::Propagation {
             let rlr = _rlr.clone();
             let mut lck = rlr.lock().unwrap();
             lck.position = motion.position();
@@ -709,7 +712,7 @@ where
                 lck.angle_offset = angle; // + FRAC_PI_2;
             }
             window.queue_draw();
-            Inhibit(false)
+            glib::Propagation::Proceed
         },
     );
     let _rlr = rlr.clone();
@@ -762,14 +765,17 @@ where
 }
 
 fn get_ppi(window: &gtk::ApplicationWindow) -> f64 {
-    let screen = window.screen().unwrap();
-    let mon_num: i32 = screen.monitor_at_window(&window.window().unwrap());
-    let width_mm = screen.monitor_width_mm(mon_num) as f64;
-    let height_mm = screen.monitor_height_mm(mon_num) as f64;
+    let display = window.display();
+    let monitor = display
+        .monitor_at_window(&window.window().unwrap())
+        .unwrap();
+    //let mon_num: i32 = screen.(&);
+    let width_mm = monitor.width_mm() as f64;
+    let height_mm = monitor.height_mm() as f64;
 
-    let rectangle = screen.monitor_geometry(mon_num);
-    let width = rectangle.width as f64;
-    let height = rectangle.height as f64;
+    let rectangle = monitor.geometry();
+    let width = rectangle.width() as f64;
+    let height = rectangle.height() as f64;
     const INCH: f64 = 0.0393701;
     let diag = (width_mm * width_mm + height_mm * height_mm).sqrt() * INCH;
 
@@ -782,7 +788,10 @@ fn get_ppi(window: &gtk::ApplicationWindow) -> f64 {
     (width * width + height * height).sqrt() / diag
 }
 
-fn enter_notify(window: &gtk::ApplicationWindow, _crossing: &gtk::gdk::EventCrossing) -> Inhibit {
+fn enter_notify(
+    window: &gtk::ApplicationWindow,
+    _crossing: &gtk::gdk::EventCrossing,
+) -> glib::Propagation {
     //println!("enter");
     if let Some(screen) = window.window() {
         let display = screen.display();
@@ -792,19 +801,19 @@ fn enter_notify(window: &gtk::ApplicationWindow, _crossing: &gtk::gdk::EventCros
             ));
         }
     }
-    Inhibit(false)
+    glib::Propagation::Proceed
 }
 
 fn leave_notify(
     _application: &gtk::ApplicationWindow,
     _crossing: &gtk::gdk::EventCrossing,
-) -> Inhibit {
+) -> glib::Propagation {
     //println!("leave");
-    Inhibit(false)
+    glib::Propagation::Proceed
 }
 
 fn set_visual(window: &gtk::ApplicationWindow, _screen: Option<&gtk::gdk::Screen>) {
-    if let Some(screen) = window.screen() {
+    if let Some(screen) = gtk::prelude::GtkWindowExt::screen(window) {
         if let Some(ref visual) = screen.rgba_visual() {
             window.set_visual(Some(visual)); // crucial for transparency
         }
@@ -933,7 +942,7 @@ fn add_actions(
         p.set_program_name("rlr");
         p.set_logo(Some(&gtk::gdk_pixbuf::Pixbuf::from_xpm_data(
                     ICON,
-        )));
+        ).unwrap()));
         p.set_website_label(Some("https://github.com/epilys/rlr"));
         p.set_website(Some("https://github.com/epilys/rlr"));
         p.set_authors(&["Manos Pitsidianakis"]);
