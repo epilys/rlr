@@ -22,7 +22,8 @@
 
 use std::{
     f64::consts::{FRAC_PI_2, PI},
-    sync::{Arc, Mutex},
+    rc::Rc,
+    sync::Mutex,
 };
 
 use gtk::{
@@ -31,6 +32,33 @@ use gtk::{
     prelude::*,
     AboutDialog, DrawingArea,
 };
+
+const APP_ID: &str = "com.github.epilys.rlr";
+
+trait CairoContextExt {
+    fn set_primary_color(&self, settings: &Settings);
+    fn set_secondary_color(&self, settings: &Settings);
+}
+
+impl CairoContextExt for Context {
+    fn set_primary_color(&self, settings: &Settings) {
+        self.set_source_rgba(
+            settings.primary_color.red(),
+            settings.primary_color.green(),
+            settings.primary_color.blue(),
+            settings.primary_color.alpha(),
+        );
+    }
+
+    fn set_secondary_color(&self, settings: &Settings) {
+        self.set_source_rgba(
+            settings.secondary_color.red(),
+            settings.secondary_color.green(),
+            settings.secondary_color.blue(),
+            settings.secondary_color.alpha(),
+        );
+    }
+}
 
 include!("logo.xpm.rs");
 
@@ -108,6 +136,122 @@ impl Interval {
 }
 
 #[derive(Debug)]
+struct Settings {
+    obj: Option<gio::Settings>,
+    primary_color: gdk::RGBA,
+    secondary_color: gdk::RGBA,
+    window_opacity: f64,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            obj: None,
+            primary_color: gdk::RGBA::BLACK,
+            secondary_color: gdk::RGBA::WHITE,
+            window_opacity: 0.8,
+        }
+    }
+}
+
+impl Settings {
+    const PRIMARY_COLOR: &str = "primary-color";
+    const SECONDARY_COLOR: &str = "secondary-color";
+    const WINDOW_OPACITY: &str = "window-opacity";
+    const ALL_KEYS: &[(&str, &glib::VariantTy)] = &[
+        (Self::PRIMARY_COLOR, glib::VariantTy::STRING),
+        (Self::SECONDARY_COLOR, glib::VariantTy::STRING),
+        (Self::WINDOW_OPACITY, glib::VariantTy::DOUBLE),
+    ];
+
+    fn new() -> Result<Self, std::borrow::Cow<'static, str>> {
+        let Some(default_schemas) = gio::SettingsSchemaSource::default() else {
+            return Err("Could not load default GSettings schemas.".into());
+        };
+        let Some(gsettings_schema) = default_schemas.lookup(APP_ID, true) else {
+            return Err(format!("GSettings schema with id {APP_ID} was not found.").into());
+        };
+        let keys = gsettings_schema.list_keys();
+        {
+            let mut missing_keys = vec![];
+            for (required_key, _) in Self::ALL_KEYS {
+                if !keys.iter().any(|k| k == required_key) {
+                    missing_keys.push(required_key);
+                }
+            }
+            if !missing_keys.is_empty() {
+                return Err(format!(
+                    "GSettings schema does not contain valid keys; found keys {:?} but the \
+                     following keys are missing: {:?}.",
+                    keys, missing_keys
+                )
+                .into());
+            }
+        }
+        // Now that we have ensured the keys exist, we can look them up safely and check
+        // that they have the correct data types.
+        {
+            let mut invalid_key_types = vec![];
+            for (required_key, data_type) in Self::ALL_KEYS {
+                let value_type = gsettings_schema.key(required_key).value_type();
+                if value_type.as_ref() != *data_type {
+                    invalid_key_types.push(format!(
+                        "Expected {} for key {} but found {} instead.",
+                        data_type, required_key, value_type
+                    ));
+                }
+                if !invalid_key_types.is_empty() {
+                    return Err(format!(
+                        "GSettings schema contains invalid property types; the following errors \
+                         were encountered:\n{}.",
+                        invalid_key_types.join("\n")
+                    )
+                    .into());
+                }
+            }
+        }
+        let mut retval = Self::default();
+        let settings = gio::Settings::new(APP_ID);
+        retval.obj = Some(settings);
+        retval.sync();
+        Ok(retval)
+    }
+
+    fn sync(&mut self) {
+        let Self {
+            obj: Some(ref obj),
+            ref mut primary_color,
+            ref mut secondary_color,
+            ref mut window_opacity,
+        } = self
+        else {
+            return;
+        };
+        let primary_color_s: String = obj.get(Self::PRIMARY_COLOR);
+        if let Ok(val) = gdk::RGBA::parse(&primary_color_s) {
+            *primary_color = val;
+        } else {
+            eprintln!(
+                "Invalid {} value: {:?}",
+                Self::PRIMARY_COLOR,
+                primary_color_s
+            );
+        }
+        let secondary_color_s: String = obj.get(Self::SECONDARY_COLOR);
+        if let Ok(val) = gdk::RGBA::parse(&secondary_color_s) {
+            *secondary_color = val;
+        } else {
+            eprintln!(
+                "Invalid {} value: {:?}",
+                Self::SECONDARY_COLOR,
+                secondary_color_s
+            );
+        }
+        *window_opacity = obj.get::<f64>(Self::WINDOW_OPACITY).clamp(0.01, 1.0);
+    }
+}
+
+#[derive(Debug)]
 struct Rlr {
     position: (f64, f64),
     root_position: (i32, i32),
@@ -122,10 +266,18 @@ struct Rlr {
     angle_offset: f64,
     interval: Interval,
     ppi: f64,
+    settings: Settings,
 }
 
 impl Default for Rlr {
     fn default() -> Self {
+        let settings = match Settings::new() {
+            Ok(settings) => settings,
+            Err(error) => {
+                eprintln!("Could not load application settings. {error}");
+                Settings::default()
+            }
+        };
         Self {
             position: (0., 0.),
             root_position: (0, 0),
@@ -140,11 +292,12 @@ impl Default for Rlr {
             angle_offset: 0.,
             interval: Interval::None,
             ppi: 72.,
+            settings,
         }
     }
 }
 
-fn draw_rlr(rlr: Arc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> glib::Propagation {
+fn draw_rlr(rlr: Rc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> glib::Propagation {
     let lck = rlr.lock().unwrap();
     cr.set_font_size(8. * lck.ppi / 72.);
     if lck.protractor {
@@ -191,12 +344,23 @@ impl Rlr {
             0.,
             2. * std::f64::consts::PI,
         );
-        cr.set_source_rgb(1., 1.0, 1.0);
+        // Make entire canvas transparent, before starting to fill in the protractor
+        // circular disk area which will be opaque.
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+        cr.fill().expect("Invalid cairo surface state");
+        cr.set_secondary_color(&self.settings);
+        cr.arc(
+            length / 2.0,
+            length / 2.0,
+            length / 2.0,
+            0.,
+            2. * std::f64::consts::PI,
+        );
         cr.fill().expect("Invalid cairo surface state");
 
         let _pixels_per_tick = 10;
         let tick_size = 5.;
-        cr.set_source_rgb(0.1, 0.1, 0.1);
+        cr.set_primary_color(&self.settings);
         cr.set_line_width(1.);
 
         cr.save().unwrap();
@@ -307,7 +471,7 @@ impl Rlr {
             self.height as f64
         };
 
-        cr.set_source_rgb(1., 1.0, 1.0);
+        cr.set_secondary_color(&self.settings);
         cr.paint().expect("Invalid cairo surface state");
 
         let _pixels_per_tick = 10;
@@ -315,7 +479,8 @@ impl Rlr {
         let mut i = 0;
         let mut x: f64;
         cr.set_line_width(0.5);
-        cr.set_source_rgb(0.1, 0.1, 0.1);
+        cr.set_primary_color(&self.settings);
+        cr.save().unwrap();
         match self.interval {
             Interval::Start(start_pos) => {
                 cr.set_source_rgb(0.9, 0.9, 0.9);
@@ -355,7 +520,7 @@ impl Rlr {
             }
             _ => {}
         }
-        cr.set_source_rgb(0.1, 0.1, 0.1);
+        cr.restore().unwrap();
         cr.set_line_width(1.);
         let is_reversed = self.rotate.is_reversed();
         if self.rotate.is_rotated() {
@@ -414,9 +579,9 @@ impl Rlr {
                 extents.width() as f64 + 4.5,
                 extents.height() as f64 + 4.5,
             );
-            cr.set_source_rgb(1.0, 1.0, 1.0);
+            cr.set_secondary_color(&self.settings);
             cr.fill().expect("Invalid cairo surface state");
-            cr.set_source_rgb(0.1, 0.1, 0.1);
+            cr.set_primary_color(&self.settings);
 
             cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
 
@@ -482,9 +647,9 @@ impl Rlr {
                 extents.width() as f64 + 4.5,
                 extents.height() as f64 + 8.5,
             );
-            cr.set_source_rgb(1.0, 1.0, 1.0);
+            cr.set_secondary_color(&self.settings);
             cr.fill().expect("Invalid cairo surface state");
-            cr.set_source_rgb(0.1, 0.1, 0.1);
+            cr.set_primary_color(&self.settings);
 
             cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
 
@@ -501,9 +666,9 @@ impl Rlr {
 }
 
 fn main() {
-    let application = gtk::Application::new(Some("com.github.epilys.rlr"), Default::default());
+    let application = gtk::Application::new(Some(APP_ID), Default::default());
 
-    let rlr = Arc::new(Mutex::new(Rlr::default()));
+    let rlr = Rc::new(Mutex::new(Rlr::default()));
 
     application.connect_startup(|application: &gtk::Application| {
         application.set_accels_for_action("app.quit", &["<Primary>Q", "Q"]);
@@ -537,7 +702,7 @@ fn main() {
     application.run();
 }
 
-fn drawable<F>(application: &gtk::Application, rlr: Arc<Mutex<Rlr>>, draw_fn: F)
+fn drawable<F>(application: &gtk::Application, rlr: Rc<Mutex<Rlr>>, draw_fn: F)
 where
     F: Fn(&DrawingArea, &Context) -> glib::Propagation + 'static,
 {
@@ -549,6 +714,23 @@ where
 
     set_visual(&window, None);
 
+    {
+        let rlr2 = rlr.clone();
+        let lck = rlr.lock().unwrap();
+        let window = window.clone();
+        if let Some(obj) = lck.settings.obj.as_ref() {
+            obj.connect_changed(None, move |_self: &gio::Settings, key: &str| {
+                let rlr = rlr2.clone();
+                let mut lck = rlr.lock().unwrap();
+                lck.settings.sync();
+                if key == Settings::WINDOW_OPACITY {
+                    window.set_opacity(lck.settings.window_opacity);
+                }
+                drop(lck);
+                window.queue_draw();
+            });
+        }
+    }
     window.connect_screen_changed(set_visual);
     {
         let rlr = rlr.clone();
@@ -732,7 +914,7 @@ where
     }
 
     window.add(&drawing_area);
-    window.set_opacity(0.8);
+    window.set_opacity(rlr.lock().unwrap().settings.window_opacity);
 
     build_system_menu(application);
 
@@ -843,7 +1025,7 @@ fn build_system_menu(_application: &gtk::Application) {
 fn add_actions(
     application: &gtk::Application,
     window: &gtk::ApplicationWindow,
-    rlr: Arc<Mutex<Rlr>>,
+    rlr: Rc<Mutex<Rlr>>,
 ) {
     let freeze = gio::SimpleAction::new("freeze", None);
     let _rlr = rlr.clone();

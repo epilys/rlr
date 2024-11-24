@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<schemalist>
+  <schema id="com.github.epilys.rlr" path="/com/github/epilys/rlr/">
+    <key name="window-opacity" type="d">
+      <range min="0.01" max="1"/>
+      <default>0.8</default>
+      <summary>Window opacity with the value of 1 being 100% opacity.</summary>
+    </key>
+    <key name="primary-color" type="s">
+      <default>'#453c0f'</default>
+      <summary>Primary Color</summary>
+      <description>
+        Color used for drawing text, borders, ticks, etc.
+      </description>
+    </key>
+    <key name="secondary-color" type="s">
+      <default>'#f6d32d'</default>
+      <summary>Secondary Color</summary>
+      <description>
+        Color used for backgrounds.
+      </description>
+    </key>
+  </schema>
+</schemalist>
