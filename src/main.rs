@@ -730,7 +730,7 @@ where
     //#[cfg(debug_assertions)]
     //gtk::Window::set_interactive_debugging(true);
 
-    let drawing_area = Box::new(DrawingArea::new)();
+    let drawing_area = DrawingArea::new();
 
     drawing_area.connect_draw(draw_fn);
 
