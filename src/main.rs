@@ -59,10 +59,12 @@
 #![allow(clippy::imprecise_flops, clippy::suboptimal_flops)]
 use std::{
     f64::consts::{FRAC_PI_2, PI},
+    io::Write,
     rc::Rc,
     sync::Mutex,
 };
 
+use glib::{g_print, g_printerr};
 use gtk::{
     cairo::{Context, FontSlant, FontWeight},
     gdk, gio, glib,
@@ -96,6 +98,8 @@ impl CairoContextExt for Context {
         );
     }
 }
+
+const GSCHEMA_XML: &str = include_str!("../data/com.github.epilys.rlr.Settings.gschema.xml");
 
 include!("logo.xpm.rs");
 
@@ -268,8 +272,8 @@ impl Settings {
         if let Ok(val) = gdk::RGBA::parse(&primary_color_s) {
             *primary_color = val;
         } else {
-            eprintln!(
-                "Invalid {} value: {:?}",
+            g_printerr!(
+                "Invalid {} value: {:?}\n",
                 Self::PRIMARY_COLOR,
                 primary_color_s
             );
@@ -278,8 +282,8 @@ impl Settings {
         if let Ok(val) = gdk::RGBA::parse(&secondary_color_s) {
             *secondary_color = val;
         } else {
-            eprintln!(
-                "Invalid {} value: {:?}",
+            g_printerr!(
+                "Invalid {} value: {:?}\n",
                 Self::SECONDARY_COLOR,
                 secondary_color_s
             );
@@ -311,7 +315,7 @@ impl Default for Rlr {
         let settings = match Settings::new() {
             Ok(settings) => settings,
             Err(error) => {
-                eprintln!("Could not load application settings. {error}");
+                g_printerr!("Could not load application settings. {error}\n");
                 Settings::default()
             }
         };
@@ -702,10 +706,83 @@ impl Rlr {
     }
 }
 
-fn main() {
-    let application = gtk::Application::new(Some(APP_ID), Default::default());
+fn run_app() -> Option<i32> {
+    let application = gtk::Application::new(Some(APP_ID), gio::ApplicationFlags::default());
 
     let rlr = Rc::new(Mutex::new(Rlr::default()));
+
+    application.add_main_option(
+        "install-gsettings-schema",
+        b'\0'.into(),
+        glib::OptionFlags::NONE,
+        glib::OptionArg::String,
+        "Install the application's setting schema to the given directory. The directory will not \
+         be created if it doesn't exist. As a special case, if the directory value is \"-\" the \
+         schema will be printed at standard output. In most systems the value given should be one \
+         of [\"$HOME/.local/share/glib-2.0/schemas/\", \"/usr/share/glib-2.0/schemas/\"]. As a \
+         reminder, the command `glib-compile-schemas /path/to/glib-2.0/schemas/` must be executed \
+         for changes to take effect.",
+        Some("GLIB_2_0_SCHEMAS_DIR"),
+    );
+    application.connect_handle_local_options(
+        |_: &gtk::Application, options_dict: &glib::VariantDict| -> i32 {
+            if let Some(dir) = options_dict
+                .lookup_value("install-gsettings-schema", Some(glib::VariantTy::STRING))
+                .and_then(|variant| Some(variant.str()?.to_string()))
+            {
+                match dir.as_str() {
+                    "-" => {
+                        g_print!("{}", GSCHEMA_XML);
+                        return 0;
+                    }
+                    actual_path => {
+                        let path = std::path::Path::new(actual_path);
+                        let Ok(metadata) = std::fs::metadata(path) else {
+                            g_printerr!(
+                                "Directory {} either does not exist or you do not have \
+                                 permissions to access it.\n",
+                                actual_path
+                            );
+                            return 1;
+                        };
+                        if !metadata.is_dir() {
+                            g_printerr!(
+                                "Argument value {} is not actually a directory.\n",
+                                actual_path
+                            );
+                            return 1;
+                        }
+                        let gschema_path = path.join(format!("{APP_ID}.Settings.gschema.xml"));
+                        match std::fs::OpenOptions::new()
+                            .write(true)
+                            .create(true)
+                            .truncate(true)
+                            .open(&gschema_path)
+                            .and_then(|mut file| file.write_all(GSCHEMA_XML.as_bytes()))
+                        {
+                            Err(err) => {
+                                g_printerr!("Could not open {} for writing: {err}\n", actual_path);
+                                return 1;
+                            }
+                            Ok(_) => {
+                                g_print!(
+                                    "Wrote schema to {}. You should run the following command to \
+                                     compile the schema:\nglib-compile-schemas {actual_path}\n",
+                                    gschema_path.display()
+                                );
+                            }
+                        }
+                        return 0;
+                    }
+                }
+            }
+
+            // Pretty print:
+            //
+            // g_printerr!("{:?}", options_dict.end().print(true));
+            -1
+        },
+    );
 
     application.connect_startup(|application: &gtk::Application| {
         application.set_accels_for_action("app.quit", &["<Primary>Q", "Q"]);
@@ -736,7 +813,18 @@ fn main() {
         );
     });
 
-    application.run();
+    let retval = application.run();
+    if retval != glib::ExitCode::SUCCESS {
+        Some(retval.value())
+    } else {
+        None
+    }
+}
+
+fn main() {
+    if let Some(exit_code) = run_app() {
+        std::process::exit(exit_code);
+    }
 }
 
 fn drawable<F>(application: &gtk::Application, rlr: Rc<Mutex<Rlr>>, draw_fn: F)
@@ -869,7 +957,7 @@ where
               ev: &gtk::gdk::EventButton|
               -> glib::Propagation {
             let rlr = _rlr.clone();
-            // println!("drag end");
+            // g_printerr!("drag end\n");
             if ev.button() == 1 {
                 rlr.lock().unwrap().edit_angle_offset = false;
             }
@@ -879,7 +967,7 @@ where
     let _rlr = rlr.clone();
     window.connect_key_press_event(
         move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| -> glib::Propagation {
-            // eprintln!("press {}", ev.keyval().name().unwrap().as_str());
+            // g_printerr!("press {}\n", ev.keyval().name().unwrap().as_str());
             if ev
                 .keyval()
                 .name()
@@ -896,7 +984,7 @@ where
     let _rlr = rlr.clone();
     window.connect_key_release_event(
         move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| -> glib::Propagation {
-            // eprintln!("release {}", ev.keyval().name().unwrap().as_str());
+            // g_printerr!("release {}\n", ev.keyval().name().unwrap().as_str());
             if ev
                 .keyval()
                 .name()
@@ -977,7 +1065,7 @@ where
             window.set_default_size(lck.width, lck.height);
             window.resize(lck.width, lck.height);
             window.queue_draw();
-            // eprintln!("resized to {} {}", lck.width, lck.height);
+            // g_printerr!("resized to {}x{}\n", lck.width, lck.height);
         }
     }
 }
@@ -1009,7 +1097,7 @@ fn enter_notify(
     window: &gtk::ApplicationWindow,
     _crossing: &gtk::gdk::EventCrossing,
 ) -> glib::Propagation {
-    // eprintln!("enter");
+    // g_printerr!("enter\n");
     if let Some(screen) = window.window() {
         let display = screen.display();
         if let Some(gdk_window) = window.window() {
@@ -1025,7 +1113,7 @@ const fn leave_notify(
     _application: &gtk::ApplicationWindow,
     _crossing: &gtk::gdk::EventCrossing,
 ) -> glib::Propagation {
-    // eprintln!("leave");
+    // g_printerr!("leave\n");
     glib::Propagation::Proceed
 }
 
