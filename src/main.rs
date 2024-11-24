@@ -199,6 +199,9 @@ impl Rlr {
         cr.set_source_rgb(0.1, 0.1, 0.1);
         cr.set_line_width(1.);
 
+        cr.save().unwrap();
+        cr.set_source_rgba(0.1, 0.1, 0.1, 0.1);
+
         // Make concentric circles at distance `tick_size`
         for i in 1..(length / 2.).floor() as i64 {
             let r = (i as f64) * tick_size * 10.;
@@ -208,6 +211,7 @@ impl Rlr {
                 break;
             }
         }
+        cr.restore().unwrap();
 
         // Make circular angle ticks at the outmost circle
         for quadrant in 0..4 {
