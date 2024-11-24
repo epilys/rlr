@@ -493,10 +493,7 @@ impl Rlr {
 }
 
 fn main() {
-    let application = gtk::Application::new(
-        Some("com.github.gtk-rs.examples.cairotest"),
-        Default::default(),
-    );
+    let application = gtk::Application::new(Some("com.github.epilys.rlr"), Default::default());
 
     let rlr = Arc::new(Mutex::new(Rlr::default()));
 
