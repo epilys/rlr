@@ -307,6 +307,7 @@ struct Rlr {
     angle_offset: f64,
     interval: Interval,
     ppi: f64,
+    scale_factor: f64,
     settings: Settings,
 }
 
@@ -333,6 +334,7 @@ impl Default for Rlr {
             angle_offset: 0.,
             interval: Interval::None,
             ppi: 72.,
+            scale_factor: 1.0,
             settings,
         }
     }
@@ -585,7 +587,7 @@ impl Rlr {
                 cr.stroke().expect("Invalid cairo surface state");
                 if i % 50 == 0 {
                     cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
-                    let label = format!("{}", i);
+                    let label = format!("{}", (f64::from(i) * self.scale_factor).floor());
                     let extents = cr
                         .text_extents(&label)
                         .expect("Invalid cairo surface state");
@@ -603,7 +605,7 @@ impl Rlr {
             cr.move_to(1.0, x);
             cr.line_to(breadth, x);
             cr.stroke().expect("Invalid cairo surface state");
-            let pos_label = format!("{}px", pos);
+            let pos_label = format!("{}px", pos * self.scale_factor);
             let extents = cr
                 .text_extents(&pos_label)
                 .expect("Invalid cairo surface state");
@@ -652,7 +654,7 @@ impl Rlr {
                 cr.stroke().expect("Invalid cairo surface state");
                 if i % 50 == 0 {
                     cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
-                    let label = format!("{}", i);
+                    let label = format!("{}", (f64::from(i) * self.scale_factor).floor());
                     let extents = cr
                         .text_extents(&label)
                         .expect("Invalid cairo surface state");
@@ -671,7 +673,7 @@ impl Rlr {
             cr.line_to(x - 2., breadth);
             cr.stroke().expect("Invalid cairo surface state");
 
-            let pos_label = format!("{}px", pos);
+            let pos_label = format!("{}px", pos * self.scale_factor);
             let extents = cr
                 .text_extents(&pos_label)
                 .expect("Invalid cairo surface state");
@@ -1052,45 +1054,46 @@ where
 
     build_system_menu(application);
 
-    let _rlr = rlr.clone();
-    add_actions(application, &window, rlr);
+    add_actions(application, &window, rlr.clone());
 
     window.show_all();
-    let ppi = get_ppi(&window);
-    if ppi > 72. {
-        if let Ok(mut lck) = _rlr.lock() {
+    let (ppi, scale_factor) = get_ppi_and_scale_factor(&window);
+    if let Ok(mut lck) = rlr.lock() {
+        if ppi > 72. {
             lck.ppi = ppi;
+            lck.scale_factor = scale_factor;
             lck.width += lck.width / 2;
             lck.height += lck.height / 2;
             window.set_default_size(lck.width, lck.height);
             window.resize(lck.width, lck.height);
             window.queue_draw();
             // g_printerr!("resized to {}x{}\n", lck.width, lck.height);
+        } else {
+            lck.scale_factor = scale_factor;
         }
     }
 }
 
-fn get_ppi(window: &gtk::ApplicationWindow) -> f64 {
+fn get_ppi_and_scale_factor(window: &gtk::ApplicationWindow) -> (f64, f64) {
+    const INCH: f64 = 0.0393701;
+
     let display = window.display();
     let monitor = display
         .monitor_at_window(&window.window().unwrap())
         .unwrap();
+    let scale_factor = f64::from(monitor.scale_factor());
     let width_mm = f64::from(monitor.width_mm());
     let height_mm = f64::from(monitor.height_mm());
 
     let rectangle = monitor.geometry();
-    let width = f64::from(rectangle.width());
-    let height = f64::from(rectangle.height());
-    const INCH: f64 = 0.0393701;
+    let width = scale_factor * f64::from(rectangle.width());
+    let height = scale_factor * f64::from(rectangle.height());
     let diag = (width_mm * width_mm + height_mm * height_mm).sqrt() * INCH;
 
-    //let ppi = (width * width + height * height).sqrt() / diag;
-    //std::dbg!(
-    //    ppi,
-    //    width / (width_mm as f64 * INCH),
-    //    height / (height_mm as f64 * INCH)
-    //);
-    (width * width + height * height).sqrt() / diag
+    (
+        (width * width + height * height).sqrt() / diag,
+        scale_factor,
+    )
 }
 
 fn enter_notify(
