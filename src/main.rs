@@ -412,11 +412,11 @@ impl Rlr {
         // Make concentric circles at distance `tick_size`
         for i in 1..(length / 2.).floor() as i64 {
             let r = (i as f64) * tick_size * 10.;
-            cr.arc(length / 2., length / 2., r, 0., 2. * std::f64::consts::PI);
-            cr.stroke().expect("Invalid cairo surface state");
             if 2. * r >= length {
                 break;
             }
+            cr.arc(length / 2., length / 2., r, 0., 2. * std::f64::consts::PI);
+            cr.stroke().expect("Invalid cairo surface state");
         }
         cr.restore().unwrap();
 
