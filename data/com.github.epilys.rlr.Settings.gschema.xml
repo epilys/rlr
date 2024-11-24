@@ -20,5 +20,10 @@
         Color used for backgrounds.
       </description>
     </key>
+    <key name="font-size-factor" type="d">
+      <range min="0.1" max="10"/>
+      <default>1</default>
+      <summary>Value to multiply font size with.</summary>
+    </key>
   </schema>
 </schemalist>

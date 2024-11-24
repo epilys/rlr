@@ -188,6 +188,7 @@ struct Settings {
     primary_color: gdk::RGBA,
     secondary_color: gdk::RGBA,
     window_opacity: f64,
+    font_size_factor: f64,
 }
 
 impl Default for Settings {
@@ -197,6 +198,7 @@ impl Default for Settings {
             primary_color: gdk::RGBA::BLACK,
             secondary_color: gdk::RGBA::WHITE,
             window_opacity: 0.8,
+            font_size_factor: 1.0,
         }
     }
 }
@@ -205,10 +207,12 @@ impl Settings {
     const PRIMARY_COLOR: &'static str = "primary-color";
     const SECONDARY_COLOR: &'static str = "secondary-color";
     const WINDOW_OPACITY: &'static str = "window-opacity";
+    const FONT_SIZE_FACTOR: &'static str = "font-size-factor";
     const ALL_KEYS: &'static [(&'static str, &'static glib::VariantTy)] = &[
         (Self::PRIMARY_COLOR, glib::VariantTy::STRING),
         (Self::SECONDARY_COLOR, glib::VariantTy::STRING),
         (Self::WINDOW_OPACITY, glib::VariantTy::DOUBLE),
+        (Self::FONT_SIZE_FACTOR, glib::VariantTy::DOUBLE),
     ];
 
     fn new() -> Result<Self, std::borrow::Cow<'static, str>> {
@@ -270,6 +274,7 @@ impl Settings {
             ref mut primary_color,
             ref mut secondary_color,
             ref mut window_opacity,
+            ref mut font_size_factor,
         } = self
         else {
             return;
@@ -295,6 +300,7 @@ impl Settings {
             );
         }
         *window_opacity = obj.get::<f64>(Self::WINDOW_OPACITY).clamp(0.01, 1.0);
+        *font_size_factor = obj.get::<f64>(Self::FONT_SIZE_FACTOR).clamp(0.1, 10.0);
     }
 }
 
@@ -348,7 +354,9 @@ impl Default for Rlr {
 
 fn draw_rlr(rlr: Rc<Mutex<Rlr>>, drar: &DrawingArea, cr: &Context) -> glib::Propagation {
     let lck = rlr.lock().unwrap();
-    cr.set_font_size((8.0 / f64::from(lck.scale_factor)) * lck.ppi / 72.);
+    cr.set_font_size(
+        lck.settings.font_size_factor * (8.0 / f64::from(lck.scale_factor)) * lck.ppi / 72.,
+    );
     if lck.protractor {
         return lck.draw_douglas(drar, cr);
     }
@@ -800,6 +808,8 @@ fn run_app() -> Option<i32> {
         application.set_accels_for_action("app.freeze", &["F", "space"]);
         application.set_accels_for_action("app.increase", &["plus"]);
         application.set_accels_for_action("app.decrease", &["minus"]);
+        application.set_accels_for_action("app.increase_font_size", &["<Primary>plus"]);
+        application.set_accels_for_action("app.decrease_font_size", &["<Primary>minus"]);
         application.set_accels_for_action("app.about", &["question", "F1"]);
         application
             .set_accels_for_action("app.move_right", &["Right", "<Primary>Right", "rightarrow"]);
@@ -1325,6 +1335,26 @@ fn add_actions(
         window.queue_draw();
     }));
     let _rlr = rlr.clone();
+    let increase_font_size = gio::SimpleAction::new("increase_font_size", None);
+    increase_font_size.connect_activate(glib::clone!(@weak window => move |_, _| {
+        {
+            let mut lck = _rlr.lock().unwrap();
+            lck.settings.font_size_factor += 0.05;
+            lck.settings.font_size_factor = lck.settings.font_size_factor.clamp(0.1, 10.0);
+        }
+        window.queue_draw();
+    }));
+    let _rlr = rlr.clone();
+    let decrease_font_size = gio::SimpleAction::new("decrease_font_size", None);
+    decrease_font_size.connect_activate(glib::clone!(@weak window => move |_, _| {
+        {
+            let mut lck = _rlr.lock().unwrap();
+            lck.settings.font_size_factor -= 0.05;
+            lck.settings.font_size_factor = lck.settings.font_size_factor.clamp(0.1, 10.0);
+        }
+        window.queue_draw();
+    }));
+    let _rlr = rlr.clone();
     let move_right = gio::SimpleAction::new("move_right", None);
     move_right.connect_activate(glib::clone!(@weak window => move |_, _| {
         let rlr = _rlr.clone();
@@ -1391,6 +1421,8 @@ fn add_actions(
     application.add_action(&move_down);
     application.add_action(&increase);
     application.add_action(&decrease);
+    application.add_action(&increase_font_size);
+    application.add_action(&decrease_font_size);
     application.add_action(&freeze);
     application.add_action(&protractor);
     application.add_action(&rotate);
