@@ -12,7 +12,7 @@ keywords = ["pixel", "pixels",  "display", "ruler", "screen"]
 rust-version = "1.70.0"
 
 [dependencies]
-gtk = "0.18"
+gtk = { version = "0.18", features = ["v3_24"] }
 
 [[bin]]
 name = "rlr"

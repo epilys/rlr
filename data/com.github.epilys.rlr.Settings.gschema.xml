@@ -25,5 +25,12 @@
       <default>1</default>
       <summary>Value to multiply font size with.</summary>
     </key>
+    <key name="font-name" type="s">
+      <default>'Sans'</default>
+      <summary>Font name</summary>
+      <description>
+        Font used for text.
+      </description>
+    </key>
   </schema>
 </schemalist>

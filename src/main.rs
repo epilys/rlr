@@ -189,6 +189,7 @@ struct Settings {
     secondary_color: gdk::RGBA,
     window_opacity: f64,
     font_size_factor: f64,
+    font_name: String,
     changed_signal_id: Option<glib::signal::SignalHandlerId>,
 }
 
@@ -200,6 +201,7 @@ impl Default for Settings {
             secondary_color: gdk::RGBA::parse("#f6d32d").unwrap(),
             window_opacity: 0.8,
             font_size_factor: 1.0,
+            font_name: "Sans".to_string(),
             changed_signal_id: None,
         }
     }
@@ -210,11 +212,13 @@ impl Settings {
     const SECONDARY_COLOR: &'static str = "secondary-color";
     const WINDOW_OPACITY: &'static str = "window-opacity";
     const FONT_SIZE_FACTOR: &'static str = "font-size-factor";
+    const FONT_NAME: &'static str = "font-name";
     const ALL_KEYS: &'static [(&'static str, &'static glib::VariantTy)] = &[
         (Self::PRIMARY_COLOR, glib::VariantTy::STRING),
         (Self::SECONDARY_COLOR, glib::VariantTy::STRING),
         (Self::WINDOW_OPACITY, glib::VariantTy::DOUBLE),
         (Self::FONT_SIZE_FACTOR, glib::VariantTy::DOUBLE),
+        (Self::FONT_NAME, glib::VariantTy::STRING),
     ];
 
     fn new() -> Result<Self, std::borrow::Cow<'static, str>> {
@@ -277,6 +281,7 @@ impl Settings {
             ref mut secondary_color,
             ref mut window_opacity,
             ref mut font_size_factor,
+            ref mut font_name,
             changed_signal_id: _,
         } = self
         else {
@@ -304,6 +309,7 @@ impl Settings {
         }
         *window_opacity = obj.get::<f64>(Self::WINDOW_OPACITY).clamp(0.01, 1.0);
         *font_size_factor = obj.get::<f64>(Self::FONT_SIZE_FACTOR).clamp(0.1, 10.0);
+        *font_name = obj.get(Self::FONT_NAME);
     }
 
     fn sync_write(&self) {
@@ -313,6 +319,7 @@ impl Settings {
             ref secondary_color,
             ref window_opacity,
             ref font_size_factor,
+            ref font_name,
             ref changed_signal_id,
         } = self
         else {
@@ -325,10 +332,19 @@ impl Settings {
         _ = obj.set(Self::SECONDARY_COLOR, secondary_color.to_str().as_str());
         _ = obj.set(Self::WINDOW_OPACITY, *window_opacity);
         _ = obj.set(Self::FONT_SIZE_FACTOR, *font_size_factor);
+        _ = obj.set(Self::FONT_NAME, font_name);
         gio::Settings::sync();
         if let Some(sid) = changed_signal_id.as_ref() {
             obj.unblock_signal(sid);
         }
+    }
+
+    fn font_name(&self) -> &str {
+        self.font_name
+            .as_bytes()
+            .iter()
+            .rposition(|b| *b == b' ')
+            .map_or_else(|| self.font_name.trim(), |sp| self.font_name[..sp].trim())
     }
 }
 
@@ -516,7 +532,11 @@ impl Rlr {
         cr.line_to(cur.0, cur.1 + length / 2. - 0.5);
         cr.stroke().expect("Invalid cairo surface state");
         cr.restore().unwrap();
-        cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
+        cr.select_font_face(
+            self.settings.font_name(),
+            FontSlant::Normal,
+            FontWeight::Normal,
+        );
 
         // Draw arc signifying which angle is being measured
         cr.move_to(length / 2. - 0.5, length / 2. - 0.5);
@@ -564,6 +584,11 @@ impl Rlr {
         let mut i = 0;
         let mut x: f64;
         cr.set_line_width(0.5);
+        cr.select_font_face(
+            self.settings.font_name(),
+            FontSlant::Normal,
+            FontWeight::Normal,
+        );
         cr.set_primary_color(&self.settings);
         cr.save().unwrap();
         match self.interval {
@@ -607,6 +632,11 @@ impl Rlr {
         }
         cr.restore().unwrap();
         cr.set_line_width(1.);
+        cr.select_font_face(
+            self.settings.font_name(),
+            FontSlant::Normal,
+            FontWeight::Normal,
+        );
         let is_reversed = self.rotate.is_reversed();
         if self.rotate.is_rotated() {
             while i < self.height {
@@ -628,7 +658,7 @@ impl Rlr {
                 cr.line_to(breadth - 1.0, x);
                 cr.stroke().expect("Invalid cairo surface state");
                 if i % 50 == 0 {
-                    cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
+                    // cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
                     let label = format!("{}", i * self.scale_factor);
                     let extents = cr
                         .text_extents(&label)
@@ -668,8 +698,6 @@ impl Rlr {
             cr.fill().expect("Invalid cairo surface state");
             cr.set_primary_color(&self.settings);
 
-            cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
-
             cr.move_to(breadth / 2. - extents.width() as f64 / 2., x);
             cr.show_text(&pos_label)
                 .expect("Invalid cairo surface state");
@@ -695,7 +723,7 @@ impl Rlr {
                 cr.line_to(x, breadth - 1.0);
                 cr.stroke().expect("Invalid cairo surface state");
                 if i % 50 == 0 {
-                    cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
+                    // cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
                     let label = format!("{}", i * self.scale_factor);
                     let extents = cr
                         .text_extents(&label)
@@ -735,8 +763,6 @@ impl Rlr {
             cr.set_secondary_color(&self.settings);
             cr.fill().expect("Invalid cairo surface state");
             cr.set_primary_color(&self.settings);
-
-            cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
 
             cr.move_to(x, breadth / 2. + 2.5);
             cr.show_text(&pos_label)
@@ -1396,11 +1422,17 @@ fn add_actions(
             let secondary_color_chooser = gtk::ColorButton::new();
             secondary_color_chooser.set_expand(true);
             secondary_color_chooser.set_use_alpha(true);
+            let font_button = gtk::FontButton::new();
+            font_button.set_level(gtk::FontChooserLevel::FAMILY | gtk::FontChooserLevel::STYLE);
+            font_button.set_use_font(true);
+            font_button.set_show_size(false);
+            font_button.set_use_size(false);
             {
                 let lck = rlr.lock().unwrap();
                 primary_color_chooser.set_rgba(&lck.settings.primary_color);
                 secondary_color_chooser.set_rgba(&lck.settings.secondary_color);
                 let gsettings_obj = lck.settings.obj.as_ref().unwrap().clone();
+                font_button.set_font(lck.settings.font_name());
                 drop(lck);
                 gsettings_obj
                     .bind(Settings::WINDOW_OPACITY, &opacity_adj, "value")
@@ -1432,9 +1464,25 @@ fn add_actions(
                     Some(val.to_str().to_string().into())
                 })
                 .build();
+                gsettings_obj
+                    .bind(Settings::FONT_NAME, &font_button, "font")
+                    .build();
             }
             listbox.add(&opacity_row);
             listbox.add(&font_size_row);
+            let font_name_row = gtk::FlowBox::builder()
+                .orientation(gtk::Orientation::Horizontal)
+                .can_focus(true)
+                .sensitive(true)
+                .homogeneous(true)
+                .expand(true)
+                .visible(true)
+                .max_children_per_line(2)
+                .build();
+            font_name_row.insert(&gtk::Label::new(Some("Font")), 0);
+            font_name_row.insert(
+                &font_button, 1
+            );
             let primary_color_row = gtk::FlowBox::builder()
                 .orientation(gtk::Orientation::Horizontal)
                 .can_focus(true)
@@ -1459,6 +1507,7 @@ fn add_actions(
             secondary_color_row.insert(&gtk::Label::new(Some("Secondary colour")), 0);
             secondary_color_row.insert(&secondary_color_chooser, 1);
             listbox.add(&secondary_color_row);
+            listbox.add(&font_name_row);
             d.content_area().add(&listbox);
             d.content_area().set_visible(true);
             d.content_area().set_can_focus(true);
