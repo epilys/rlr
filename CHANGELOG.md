@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.3.1] - 2024-11-25
+
+### Documentation
+
+- [**`600f4e30`**](https://github.com/epilys/rlr/commit/600f4e30cccf12a6c816ea324f4da945ddc6f303) `README.md: Fix cargo install invocation`
+
 ## [0.3.0] - 2024-11-25
 
 ### Added
@@ -69,3 +75,4 @@ All notable changes to this project will be documented in this file.
 
 [0.2.0]: <https://github.com/epilys/rlr/releases/tag/v0.2.0>
 [0.3.0]: <https://github.com/epilys/rlr/releases/tag/v0.3.0>
+[0.3.1]: <https://github.com/epilys/rlr/releases/tag/v0.3.1>
