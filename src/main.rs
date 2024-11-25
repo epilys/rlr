@@ -65,6 +65,7 @@
 use std::{
     f64::consts::{FRAC_PI_2, PI},
     io::Write,
+    path::Path,
     rc::Rc,
     sync::Mutex,
 };
@@ -190,6 +191,7 @@ struct Settings {
     window_opacity: f64,
     font_size_factor: f64,
     font_name: String,
+    window: Option<gtk::ApplicationWindow>,
     changed_signal_id: Option<glib::signal::SignalHandlerId>,
 }
 
@@ -202,6 +204,7 @@ impl Default for Settings {
             window_opacity: 0.8,
             font_size_factor: 1.0,
             font_name: "Sans".to_string(),
+            window: None,
             changed_signal_id: None,
         }
     }
@@ -221,8 +224,11 @@ impl Settings {
         (Self::FONT_NAME, glib::VariantTy::STRING),
     ];
 
-    fn new() -> Result<Self, std::borrow::Cow<'static, str>> {
-        let Some(default_schemas) = gio::SettingsSchemaSource::default() else {
+    fn new(schema_path: Option<&Path>) -> Result<Self, std::borrow::Cow<'static, str>> {
+        let Some(default_schemas) = schema_path
+            .and_then(|p| gio::SettingsSchemaSource::from_directory(p, None, true).ok())
+            .or_else(gio::SettingsSchemaSource::default)
+        else {
             return Err("Could not load default GSettings schemas.".into());
         };
         let Some(gsettings_schema) = default_schemas.lookup(APP_ID, true) else {
@@ -268,7 +274,11 @@ impl Settings {
             }
         }
         let mut retval = Self::default();
-        let settings = gio::Settings::new(APP_ID);
+        let settings = if schema_path.is_some() {
+            gio::Settings::new_full(&gsettings_schema, gio::SettingsBackend::NONE, None)
+        } else {
+            gio::Settings::new(APP_ID)
+        };
         retval.obj = Some(settings);
         retval.sync_read();
         Ok(retval)
@@ -282,6 +292,7 @@ impl Settings {
             ref mut window_opacity,
             ref mut font_size_factor,
             ref mut font_name,
+            window: _,
             changed_signal_id: _,
         } = self
         else {
@@ -321,6 +332,7 @@ impl Settings {
             ref font_size_factor,
             ref font_name,
             ref changed_signal_id,
+            window: _,
         } = self
         else {
             return;
@@ -346,6 +358,88 @@ impl Settings {
             .rposition(|b| *b == b' ')
             .map_or_else(|| self.font_name.trim(), |sp| self.font_name[..sp].trim())
     }
+
+    const fn is_installed(&self) -> bool {
+        self.obj.is_some() && self.changed_signal_id.is_some()
+    }
+
+    fn try_install(also_compile: bool, path: &Path) -> Result<(), String> {
+        let Ok(metadata) = std::fs::metadata(path) else {
+            return Err(format!(
+                "Directory {} either does not exist or you do not have permissions to access it.",
+                path.display()
+            ));
+        };
+        if !metadata.is_dir() {
+            return Err(format!(
+                "Argument value {} is not actually a directory.",
+                path.display()
+            ));
+        }
+        let gschema_path = path.join(format!("{APP_ID}.Settings.gschema.xml"));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&gschema_path)
+            .and_then(|mut file| file.write_all(GSCHEMA_XML.as_bytes()))
+        {
+            Err(err) => Err(format!(
+                "Could not open {} for writing: {err}",
+                path.display()
+            )),
+            Ok(_) => {
+                if !also_compile {
+                    return Ok(());
+                }
+                match std::process::Command::new("glib-compile-schemas")
+                    .arg(path)
+                    .stdin(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
+                    .stdin(std::process::Stdio::null())
+                    .output()
+                {
+                    Ok(output) => {
+                        if output.status.success() {
+                            return Ok(());
+                        }
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        Err(format!(
+                            "`glib-compile-schemas {}` failed with exit status {}: stdout was: \
+                             `{:?}`, stderr was `{:?}`",
+                            path.display(),
+                            output.status,
+                            stdout,
+                            stderr
+                        ))
+                    }
+                    Err(err) => Err(format!(
+                        "Could not launch `glib-compile-schemas {}`: {err}",
+                        path.display()
+                    )),
+                }
+            }
+        }
+    }
+
+    fn set_window(rlr: Rc<Mutex<Rlr>>, window: gtk::ApplicationWindow) {
+        let rlr2 = rlr.clone();
+        let mut lck = rlr.lock().unwrap();
+        lck.settings.window = Some(window.clone());
+        lck.settings.changed_signal_id = lck.settings.obj.as_ref().map(|obj| {
+            obj.connect_changed(None, move |_self: &gio::Settings, key: &str| {
+                let rlr = rlr2.clone();
+                let mut lck = rlr.lock().unwrap();
+                lck.settings.sync_read();
+                if key == Self::WINDOW_OPACITY {
+                    window.set_opacity(lck.settings.window_opacity);
+                }
+                drop(lck);
+                window.queue_draw();
+            })
+        });
+    }
 }
 
 #[derive(Debug)]
@@ -369,7 +463,7 @@ struct Rlr {
 
 impl Default for Rlr {
     fn default() -> Self {
-        let settings = match Settings::new() {
+        let settings = match Settings::new(None) {
             Ok(settings) => settings,
             Err(error) => {
                 g_printerr!("Could not load application settings. {error}\n");
@@ -806,7 +900,7 @@ fn run_app() -> Option<i32> {
                         return 0;
                     }
                     actual_path => {
-                        let path = std::path::Path::new(actual_path);
+                        let path = Path::new(actual_path);
                         let Ok(metadata) = std::fs::metadata(path) else {
                             g_printerr!(
                                 "Directory {} either does not exist or you do not have \
@@ -913,21 +1007,7 @@ where
     set_visual(&window, None);
 
     {
-        let rlr2 = rlr.clone();
-        let mut lck = rlr.lock().unwrap();
-        let window = window.clone();
-        lck.settings.changed_signal_id = lck.settings.obj.as_ref().map(|obj| {
-            obj.connect_changed(None, move |_self: &gio::Settings, key: &str| {
-                let rlr = rlr2.clone();
-                let mut lck = rlr.lock().unwrap();
-                lck.settings.sync_read();
-                if key == Settings::WINDOW_OPACITY {
-                    window.set_opacity(lck.settings.window_opacity);
-                }
-                drop(lck);
-                window.queue_draw();
-            })
-        });
+        Settings::set_window(rlr.clone(), window.clone());
     }
     window.connect_screen_changed(set_visual);
     {
@@ -1328,241 +1408,12 @@ fn add_actions(
 
     let about = gio::SimpleAction::new("about", None);
     about.connect_activate(glib::clone!(@weak window => move |_, _| {
-        let gen_comments = |with_markup: bool| {
-            format!("- Quit with {ms}q{me} or {ms}{lt}{primary}{gt}Q{me}.
-- Click to drag.
-- Press {ms}s{me} or {ms}F2{me} to open the Settings window.
-- Press {ms}r{me} to rotate 90 degrees. Press {ms}{lt}Shift{gt}r{me} to flip (mirror) the marks without rotation.
-- Press {ms}p{me} to toggle protractor mode.
-- Press {ms}f{me} or {ms}{lt}Space{gt}{me} to toggle freezing the measurements.
-- Press {ms}{primary}{me} and drag the angle base side to rotate it in protractor mode.
-- Press {ms}{primary}{me} continuously to disable precision (measurements will snap to nearest integer).
-- Press {ms}+{me} to increase size. Press {ms}-{me} to decrease size.
-- Press {ms}{lt}{primary}{gt}+{me}, {ms}{lt}{primary}{gt}+{me} to increase font size. Press {ms}{lt}{primary}{gt}-{me}, {ms}{lt}{primary}{gt}{me} to decrease font size.
-- Press {ms}Up{me}, {ms}Down{me}, {ms}Left{me}, {ms}Right{me} to move window position by 10 pixels. Also hold down {ms}{primary}{me} to move by 1 pixel.
-", ms =if with_markup { "<tt>" } else { "`" }, me = if with_markup { "</tt>"} else {"`"}, lt = if with_markup { "&lt;" } else {"<"}, gt = if with_markup { "&gt;" } else { ">" }, primary = if cfg!(target_os = "macos") { "⌘" } else {"Control_L"})
-        };
-        let p = AboutDialog::new();
-        p.set_program_name("rlr");
-        p.set_logo(Some(&gtk::gdk_pixbuf::Pixbuf::from_xpm_data(
-                    ICON,
-        ).unwrap()));
-        p.set_website_label(Some("https://github.com/epilys/rlr"));
-        p.set_website(Some("https://github.com/epilys/rlr"));
-        p.set_authors(&["Manos Pitsidianakis <manos@pitsidianak.is>"]);
-        p.set_copyright(Some("2021 - Manos Pitsidianakis"));
-        p.set_title("About rlr");
-        p.set_license_type(gtk::License::Gpl30);
-        p.set_transient_for(Some(&window));
-        p.set_comments(Some(&gen_comments(false)));
-        // Access comments label widget through this monstrosity because AboutDialog does not
-        // provide us with a clean interface to access the content widgets semantically.
-        if let Some(comments_widget) = p.content_area().children().first().and_then(|w| w.clone().downcast::<gtk::Container>().ok()).and_then(|c| c.children().get(2).cloned()).and_then(|w| w.downcast::<gtk::Container>().ok()).and_then(|c| c.children().first().cloned()).and_then(|w| w.downcast::<gtk::Container>().ok()).and_then(|c| c.children().get(1).cloned()) {
-            if let Ok(comments_label) = comments_widget.downcast::<gtk::Label>() {
-                if comments_label.text().starts_with("- Quit") {
-                    comments_label.set_text(&gen_comments(true));
-                    comments_label.set_use_markup(true);
-                    comments_label.set_justify(gtk::Justification::Left);
-                }
-            }
-        }
-        p.connect_response(
-            glib::clone!(@weak window => move |self_, response: gtk::ResponseType| {
-                match response {
-                    gtk::ResponseType::Close | gtk::ResponseType::DeleteEvent => self_.emit_close(),
-                    _ => {},
-            }
-            }),
-        );
-        p.show_all();
+        show_about_window(&window);
     }));
     let settings = gio::SimpleAction::new("settings", None);
-
     settings.connect_activate(
         glib::clone!(@weak application, @weak window, @strong rlr => move |_, _| {
-            let listbox = gtk::ListBox::builder()
-                .visible(true)
-                .sensitive(true)
-                .can_focus(true)
-                .expand(true)
-                .build();
-            let d = gtk::Dialog::builder()
-                //.attached_to(&window)
-                .application(&application)
-                .title("rlr Settings")
-                .has_focus(true)
-                .can_focus(true)
-                .sensitive(true)
-                .border_width(15)
-                .resizable(false)
-                .transient_for(&window)
-                .type_(gtk::WindowType::Toplevel)
-                .type_hint(gdk::WindowTypeHint::Dialog)
-                .build();
-            // listbox.add(&gtk::Label::new(Some("Settings")));
-            // d.content_area()
-            let opacity_adj = gtk::Adjustment::new(0.0, 0.01, 1.0, 0.05, 0.1, 0.1);
-            let font_size_adj = gtk::Adjustment::new(0.0, 0.1, 10.0, 0.05, 0.1, 0.1);
-            let opacity_row = gtk::FlowBox::builder()
-                .orientation(gtk::Orientation::Horizontal)
-                .can_focus(true)
-                .sensitive(true)
-                .homogeneous(true)
-                .expand(true)
-                .visible(true)
-                .max_children_per_line(2)
-                .build();
-            opacity_row.insert(&gtk::Label::new(Some("Opacity")), 0);
-            opacity_row.insert(
-                &gtk::Scale::builder()
-                .can_focus(true)
-                .sensitive(true)
-                .visible(true)
-                .digits(3)
-                .adjustment(&opacity_adj)
-                .expand(true)
-                .build(),
-                1,
-            );
-            let font_size_row = gtk::FlowBox::builder()
-                .orientation(gtk::Orientation::Horizontal)
-                .can_focus(true)
-                .sensitive(true)
-                .homogeneous(true)
-                .expand(true)
-                .visible(true)
-                .max_children_per_line(2)
-                .build();
-            font_size_row.insert(&gtk::Label::new(Some("Font size factor")), 0);
-            font_size_row.insert(
-                &gtk::Scale::builder()
-                .can_focus(true)
-                .sensitive(true)
-                .visible(true)
-                .digits(3)
-                .adjustment(&font_size_adj)
-                .expand(true)
-                .build(),
-                1,
-            );
-            let primary_color_chooser = gtk::ColorButton::new();
-            primary_color_chooser.set_expand(true);
-            primary_color_chooser.set_use_alpha(true);
-            let secondary_color_chooser = gtk::ColorButton::new();
-            secondary_color_chooser.set_expand(true);
-            secondary_color_chooser.set_use_alpha(true);
-            let font_button = gtk::FontButton::new();
-            font_button.set_level(gtk::FontChooserLevel::FAMILY | gtk::FontChooserLevel::STYLE);
-            font_button.set_use_font(true);
-            font_button.set_show_size(false);
-            font_button.set_use_size(false);
-            {
-                let lck = rlr.lock().unwrap();
-                primary_color_chooser.set_rgba(&lck.settings.primary_color);
-                secondary_color_chooser.set_rgba(&lck.settings.secondary_color);
-                let gsettings_obj = lck.settings.obj.as_ref().unwrap().clone();
-                font_button.set_font(lck.settings.font_name());
-                drop(lck);
-                gsettings_obj
-                    .bind(Settings::WINDOW_OPACITY, &opacity_adj, "value")
-                    .build();
-                gsettings_obj
-                    .bind(Settings::FONT_SIZE_FACTOR, &font_size_adj, "value")
-                    .build();
-                gsettings_obj
-                    .bind(Settings::PRIMARY_COLOR, &primary_color_chooser, "rgba")
-                    .mapping(|var, _| {
-                        let hash: String = var.get()?;
-                        let val: gdk::RGBA = gdk::RGBA::parse(&hash).ok()?;
-                        Some(val.into())
-                    })
-                .set_mapping(|var, _| {
-                    let val: gdk::RGBA = var.get().ok()?;
-                    Some(val.to_str().to_string().into())
-                })
-                .build();
-                gsettings_obj
-                    .bind(Settings::SECONDARY_COLOR, &secondary_color_chooser, "rgba")
-                    .mapping(|var, _| {
-                        let hash: String = var.get()?;
-                        let val: gdk::RGBA = gdk::RGBA::parse(&hash).ok()?;
-                        Some(val.into())
-                    })
-                .set_mapping(|var, _| {
-                    let val: gdk::RGBA = var.get().ok()?;
-                    Some(val.to_str().to_string().into())
-                })
-                .build();
-                gsettings_obj
-                    .bind(Settings::FONT_NAME, &font_button, "font")
-                    .build();
-            }
-            listbox.add(&opacity_row);
-            listbox.add(&font_size_row);
-            let font_name_row = gtk::FlowBox::builder()
-                .orientation(gtk::Orientation::Horizontal)
-                .can_focus(true)
-                .sensitive(true)
-                .homogeneous(true)
-                .expand(true)
-                .visible(true)
-                .max_children_per_line(2)
-                .build();
-            font_name_row.insert(&gtk::Label::new(Some("Font")), 0);
-            font_name_row.insert(
-                &font_button, 1
-            );
-            let primary_color_row = gtk::FlowBox::builder()
-                .orientation(gtk::Orientation::Horizontal)
-                .can_focus(true)
-                .sensitive(true)
-                .homogeneous(true)
-                .expand(true)
-                .visible(true)
-                .max_children_per_line(2)
-                .build();
-            primary_color_row.insert(&gtk::Label::new(Some("Primary colour")), 0);
-            primary_color_row.insert(&primary_color_chooser, 1);
-            listbox.add(&primary_color_row);
-            let secondary_color_row = gtk::FlowBox::builder()
-                .orientation(gtk::Orientation::Horizontal)
-                .can_focus(true)
-                .sensitive(true)
-                .homogeneous(true)
-                .expand(true)
-                .visible(true)
-                .max_children_per_line(2)
-                .build();
-            secondary_color_row.insert(&gtk::Label::new(Some("Secondary colour")), 0);
-            secondary_color_row.insert(&secondary_color_chooser, 1);
-            listbox.add(&secondary_color_row);
-            listbox.add(&font_name_row);
-            d.content_area().add(&listbox);
-            d.content_area().set_visible(true);
-            d.content_area().set_can_focus(true);
-            d.add_button("Restore defaults", gtk::ResponseType::Reject);
-            d.add_button("Close", gtk::ResponseType::Close);
-            d.connect_response(
-                glib::clone!(@weak window, @strong rlr => move |self_, response: gtk::ResponseType| {
-                    match response {
-                        gtk::ResponseType::Reject => {
-                            let mut lck = rlr.lock().unwrap();
-                            lck.settings = Settings {
-                                obj: lck.settings.obj.take(),
-                                changed_signal_id: lck.settings.changed_signal_id.take(),
-                                ..Settings::default()
-                            };
-                            lck.settings.sync_write();
-                            drop(lck);
-                            window.queue_draw();
-                        },
-                        gtk::ResponseType::Close => self_.emit_close(),
-                        _ => {},
-                    }
-                }),
-            );
-
-            d.show_all();
+            show_settings_window(&application, &window, rlr.clone());
         }),
     );
 
@@ -1705,4 +1556,395 @@ fn add_actions(
     application.add_action(&about);
     application.add_action(&settings);
     application.add_action(&quit);
+}
+
+fn show_settings_window(
+    application: &gtk::Application,
+    window: &gtk::ApplicationWindow,
+    rlr: Rc<Mutex<Rlr>>,
+) {
+    struct SettingsWidgets {
+        primary_color_chooser: gtk::ColorButton,
+        secondary_color_chooser: gtk::ColorButton,
+        font_button: gtk::FontButton,
+        opacity_adj: gtk::Adjustment,
+        font_size_adj: gtk::Adjustment,
+        info_label: std::cell::RefCell<Option<gtk::Label>>,
+        try_install_button: std::cell::RefCell<Option<gtk::Widget>>,
+    }
+    let listbox = gtk::ListBox::builder()
+        .visible(true)
+        .sensitive(true)
+        .can_focus(true)
+        .expand(true)
+        .build();
+    let d = gtk::Dialog::builder()
+        .application(application)
+        .title("rlr Settings")
+        .has_focus(true)
+        .can_focus(true)
+        .sensitive(true)
+        .border_width(15)
+        .resizable(false)
+        .transient_for(window)
+        .destroy_with_parent(true)
+        .type_(gtk::WindowType::Toplevel)
+        .type_hint(gdk::WindowTypeHint::Dialog)
+        .build();
+    let opacity_adj = gtk::Adjustment::new(0.0, 0.01, 1.0, 0.05, 0.1, 0.1);
+    let font_size_adj = gtk::Adjustment::new(0.0, 0.1, 10.0, 0.05, 0.1, 0.1);
+    let opacity_row = gtk::FlowBox::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .can_focus(true)
+        .sensitive(true)
+        .homogeneous(true)
+        .expand(true)
+        .visible(true)
+        .max_children_per_line(2)
+        .build();
+    opacity_row.insert(&gtk::Label::new(Some("Opacity")), 0);
+    opacity_row.insert(
+        &gtk::Scale::builder()
+            .can_focus(true)
+            .sensitive(true)
+            .visible(true)
+            .digits(3)
+            .adjustment(&opacity_adj)
+            .expand(true)
+            .build(),
+        1,
+    );
+    let font_size_row = gtk::FlowBox::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .can_focus(true)
+        .sensitive(true)
+        .homogeneous(true)
+        .expand(true)
+        .visible(true)
+        .max_children_per_line(2)
+        .build();
+    font_size_row.insert(&gtk::Label::new(Some("Font size factor")), 0);
+    font_size_row.insert(
+        &gtk::Scale::builder()
+            .can_focus(true)
+            .sensitive(true)
+            .visible(true)
+            .digits(3)
+            .adjustment(&font_size_adj)
+            .expand(true)
+            .build(),
+        1,
+    );
+    let primary_color_chooser = gtk::ColorButton::new();
+    primary_color_chooser.set_expand(true);
+    primary_color_chooser.set_use_alpha(true);
+    let secondary_color_chooser = gtk::ColorButton::new();
+    secondary_color_chooser.set_expand(true);
+    secondary_color_chooser.set_use_alpha(true);
+    let font_button = gtk::FontButton::new();
+    font_button.set_level(gtk::FontChooserLevel::FAMILY | gtk::FontChooserLevel::STYLE);
+    font_button.set_use_font(true);
+    font_button.set_show_size(false);
+    font_button.set_use_size(false);
+    fn bind_settings(rlr: Rc<Mutex<Rlr>>, settings_widgets: &SettingsWidgets) -> bool {
+        let lck = rlr.lock().unwrap();
+        let SettingsWidgets {
+            ref primary_color_chooser,
+            ref secondary_color_chooser,
+            ref font_button,
+            ref opacity_adj,
+            ref font_size_adj,
+            ref info_label,
+            ref try_install_button,
+        } = settings_widgets;
+        primary_color_chooser.set_rgba(&lck.settings.primary_color);
+        secondary_color_chooser.set_rgba(&lck.settings.secondary_color);
+        let is_gschema_installed = lck.settings.is_installed();
+        if let Some(gsettings_obj) = lck.settings.obj.as_ref() {
+            font_button.set_font(lck.settings.font_name());
+            if let Ok(r) = info_label.try_borrow() {
+                if let Some(info_label) = r.as_ref() {
+                    info_label.set_visible(false);
+                    info_label.queue_draw();
+                }
+            }
+            if let Ok(r) = try_install_button.try_borrow() {
+                if let Some(btn) = r.as_ref() {
+                    btn.set_visible(false);
+                    btn.set_sensitive(false);
+                    btn.queue_draw();
+                }
+            }
+            gsettings_obj
+                .bind(Settings::WINDOW_OPACITY, opacity_adj, "value")
+                .build();
+            gsettings_obj
+                .bind(Settings::FONT_SIZE_FACTOR, font_size_adj, "value")
+                .build();
+            gsettings_obj
+                .bind(Settings::PRIMARY_COLOR, primary_color_chooser, "rgba")
+                .mapping(|var, _| {
+                    let hash: String = var.get()?;
+                    let val: gdk::RGBA = gdk::RGBA::parse(&hash).ok()?;
+                    Some(val.into())
+                })
+                .set_mapping(|var, _| {
+                    let val: gdk::RGBA = var.get().ok()?;
+                    Some(val.to_str().to_string().into())
+                })
+                .build();
+            gsettings_obj
+                .bind(Settings::SECONDARY_COLOR, secondary_color_chooser, "rgba")
+                .mapping(|var, _| {
+                    let hash: String = var.get()?;
+                    let val: gdk::RGBA = gdk::RGBA::parse(&hash).ok()?;
+                    Some(val.into())
+                })
+                .set_mapping(|var, _| {
+                    let val: gdk::RGBA = var.get().ok()?;
+                    Some(val.to_str().to_string().into())
+                })
+                .build();
+            gsettings_obj
+                .bind(Settings::FONT_NAME, font_button, "font")
+                .build();
+        }
+        drop(lck);
+        is_gschema_installed
+    }
+    let settings_widgets = Rc::new(SettingsWidgets {
+        primary_color_chooser,
+        secondary_color_chooser,
+        font_button,
+        opacity_adj,
+        font_size_adj,
+        info_label: std::cell::RefCell::new(None),
+        try_install_button: std::cell::RefCell::new(None),
+    });
+    let is_gschema_installed: bool = bind_settings(rlr.clone(), &settings_widgets);
+    listbox.add(&opacity_row);
+    listbox.add(&font_size_row);
+    let font_name_row = gtk::FlowBox::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .can_focus(true)
+        .sensitive(true)
+        .homogeneous(true)
+        .expand(true)
+        .visible(true)
+        .max_children_per_line(2)
+        .build();
+    font_name_row.insert(&gtk::Label::new(Some("Font")), 0);
+    font_name_row.insert(&settings_widgets.font_button, 1);
+    let primary_color_row = gtk::FlowBox::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .can_focus(true)
+        .sensitive(true)
+        .homogeneous(true)
+        .expand(true)
+        .visible(true)
+        .max_children_per_line(2)
+        .build();
+    primary_color_row.insert(&gtk::Label::new(Some("Primary colour")), 0);
+    primary_color_row.insert(&settings_widgets.primary_color_chooser, 1);
+    listbox.add(&primary_color_row);
+    let secondary_color_row = gtk::FlowBox::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .can_focus(true)
+        .sensitive(true)
+        .homogeneous(true)
+        .expand(true)
+        .visible(true)
+        .max_children_per_line(2)
+        .build();
+    secondary_color_row.insert(&gtk::Label::new(Some("Secondary colour")), 0);
+    secondary_color_row.insert(&settings_widgets.secondary_color_chooser, 1);
+    listbox.add(&secondary_color_row);
+    listbox.add(&font_name_row);
+    if !is_gschema_installed {
+        let label = gtk::Label::builder()
+            .label(
+                "<i>INFORMATION</i>: The <tt>GSettings</tt> XML schema does not seem to be \
+                 installed on your system.\nYou can attempt to install it by clicking the <tt>Try \
+                 install...</tt> button",
+            )
+            .use_markup(true)
+            .sensitive(false)
+            .visible(true)
+            .expand(true)
+            .build();
+        if let Ok(mut guard) = settings_widgets.info_label.try_borrow_mut() {
+            listbox.add(&label);
+            *guard = Some(label);
+        }
+    }
+    d.content_area().add(&listbox);
+    d.content_area().set_visible(true);
+    d.content_area().set_can_focus(true);
+    d.add_button("Restore defaults", gtk::ResponseType::Reject);
+    d.add_button("Close", gtk::ResponseType::Close);
+    if !is_gschema_installed {
+        if let Ok(mut guard) = settings_widgets.try_install_button.try_borrow_mut() {
+            let btn = d.add_button("Try install...", gtk::ResponseType::Other(0));
+            *guard = Some(btn);
+        }
+    }
+    fn settings_response_handler(
+        self_: &gtk::Dialog,
+        application: &gtk::Application,
+        window: &gtk::ApplicationWindow,
+        rlr: Rc<Mutex<Rlr>>,
+        settings_widgets: &SettingsWidgets,
+        response: gtk::ResponseType,
+    ) {
+        match response {
+            gtk::ResponseType::Reject => {
+                let mut lck = rlr.lock().unwrap();
+                lck.settings = Settings {
+                    obj: lck.settings.obj.take(),
+                    changed_signal_id: lck.settings.changed_signal_id.take(),
+                    ..Settings::default()
+                };
+                lck.settings.sync_write();
+                drop(lck);
+                window.queue_draw();
+            }
+            gtk::ResponseType::Close => self_.emit_close(),
+            gtk::ResponseType::Other(0) => {
+                if let Some(home_dir) = glib::getenv("HOME") {
+                    let destination_path =
+                        Path::new(&home_dir).join(".local/share/glib-2.0/schemas/");
+                    let md = gtk::MessageDialog::builder()
+                        .title("Install application's settings schema")
+                        .transient_for(self_)
+                        .destroy_with_parent(true)
+                        .modal(true)
+                        .message_type(gtk::MessageType::Question)
+                        .buttons(gtk::ButtonsType::OkCancel)
+                        .text(format!(
+                            "<tt>rlr</tt> will attempt to place its configuration schema to \
+                             directory <tt>{}</tt>.\nIf the directory does not exist this will \
+                             fail; you will have to create it manually.",
+                            destination_path.display()
+                        ))
+                        .secondary_text(
+                            "You can also perform this operation via the command line (see output \
+                             of <tt>--help</tt>)",
+                        )
+                        .use_markup(true)
+                        .application(application)
+                        .icon_name("dialog-information")
+                        .secondary_use_markup(true)
+                        .decorated(true)
+                        .build();
+                    match md.run() {
+                        gtk::ResponseType::Ok => {
+                            if Settings::try_install(true, &destination_path)
+                                .and_then(|_| {
+                                    rlr.lock().unwrap().settings =
+                                        Settings::new(Some(&destination_path))?;
+                                    Settings::set_window(rlr.clone(), window.clone());
+                                    Ok(())
+                                })
+                                .is_ok()
+                            {
+                                _ = bind_settings(rlr, settings_widgets);
+                            }
+                        }
+                        gtk::ResponseType::Cancel => {}
+                        _ => {}
+                    }
+                    window.queue_draw();
+                    md.emit_close();
+                }
+            }
+            _ => {}
+        }
+    }
+    d.connect_response(glib::clone!(
+            @strong settings_widgets,
+            @strong listbox,
+            @weak window,
+            @weak application,
+            @strong rlr => move |self_, response: gtk::ResponseType| {
+                settings_response_handler(self_, &application, &window, rlr.clone(), &settings_widgets, response);
+            }),
+    );
+
+    d.show_all();
+}
+
+fn show_about_window(window: &gtk::ApplicationWindow) {
+    let gen_comments = |with_markup: bool| {
+        format!(
+            "{bs}Quit{be} with {ms}q{me} or {ms}{lt}{primary}{gt}Q{me}.
+Click to {bs}drag{be}.
+Press {ms}s{me} or {ms}F2{me} to {bs}open the Settings window{be}.
+Press {ms}r{me} to {bs}rotate{be} 90 degrees. Press {ms}{lt}Shift{gt}r{me} to {bs}flip \
+             (mirror){be} the marks without rotation.
+Press {ms}p{me} to toggle {bs}protractor mode{be}.
+Press {ms}f{me} or {ms}{lt}Space{gt}{me} to toggle {bs}freezing the measurements{be}.
+Press {ms}{primary}{me} and drag the angle base side to {bs}rotate it while in protractor mode{be}.
+Press {ms}{primary}{me} continuously to {bs}disable precision{be} (measurements will snap to \
+             nearest integer).
+Press {ms}+{me} to {bs}increase size{be}. Press {ms}-{me} to {bs}decrease size{be}.
+Press {ms}{lt}{primary}{gt}+{me}, {ms}{lt}{primary}{gt}+{me} to {bs}increase font size{be}. Press \
+             {ms}{lt}{primary}{gt}-{me}, {ms}{lt}{primary}{gt}{me} to {bs}decrease font size{be}.
+Press {ms}Up{me}, {ms}Down{me}, {ms}Left{me}, {ms}Right{me} to {bs}move window position by 10 \
+             pixels{be}. Also hold down {ms}{primary}{me} to {bs}move by 1 pixel{be}.
+",
+            ms = if with_markup { "<tt>" } else { "`" },
+            me = if with_markup { "</tt>" } else { "`" },
+            lt = if with_markup { "&lt;" } else { "<" },
+            gt = if with_markup { "&gt;" } else { ">" },
+            primary = if cfg!(target_os = "macos") {
+                "⌘"
+            } else {
+                "Control_L"
+            },
+            bs = if with_markup { "<b>" } else { "" },
+            be = if with_markup { "</b>" } else { "" }
+        )
+    };
+    let p = AboutDialog::new();
+    p.set_program_name("rlr");
+    p.set_logo(Some(&gtk::gdk_pixbuf::Pixbuf::from_xpm_data(ICON).unwrap()));
+    p.set_website_label(Some("https://github.com/epilys/rlr"));
+    p.set_website(Some("https://github.com/epilys/rlr"));
+    p.set_authors(&["Manos Pitsidianakis <manos@pitsidianak.is>"]);
+    p.set_copyright(Some("2021 - Manos Pitsidianakis"));
+    p.set_title("About rlr");
+    p.set_license_type(gtk::License::Gpl30);
+    p.set_transient_for(Some(window));
+    p.set_destroy_with_parent(true);
+    p.set_comments(Some(&gen_comments(false)));
+    // Access comments label widget through this monstrosity because AboutDialog
+    // does not provide us with a clean interface to access the content widgets
+    // semantically.
+    if let Some(comments_widget) = p
+        .content_area()
+        .children()
+        .first()
+        .and_then(|w| w.clone().downcast::<gtk::Container>().ok())
+        .and_then(|c| c.children().get(2).cloned())
+        .and_then(|w| w.downcast::<gtk::Container>().ok())
+        .and_then(|c| c.children().first().cloned())
+        .and_then(|w| w.downcast::<gtk::Container>().ok())
+        .and_then(|c| c.children().get(1).cloned())
+    {
+        if let Ok(comments_label) = comments_widget.downcast::<gtk::Label>() {
+            if comments_label.text().starts_with("Quit") {
+                comments_label.set_text(&gen_comments(true));
+                comments_label.set_use_markup(true);
+                comments_label.set_justify(gtk::Justification::Left);
+            }
+        }
+    }
+    p.connect_response(
+        glib::clone!(@weak window => move |self_, response: gtk::ResponseType| {
+            if matches!(response, gtk::ResponseType::Close | gtk::ResponseType::DeleteEvent) {
+                self_.emit_close();
+            }
+        }),
+    );
+    p.show_all();
 }
