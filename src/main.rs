@@ -1044,7 +1044,7 @@ where
             if ev
                 .keyval()
                 .name()
-                .map(|n| n.as_str() == "Control_L")
+                .map(|n| n.as_str() == "Control_L" || n.as_str() == "Meta_L")
                 .unwrap_or(false)
             {
                 let rlr = _rlr.clone();
@@ -1061,7 +1061,7 @@ where
             if ev
                 .keyval()
                 .name()
-                .map(|n| n.as_str() == "Control_L")
+                .map(|n| n.as_str() == "Control_L" || n.as_str() == "Meta_L")
                 .unwrap_or(false)
             {
                 let rlr = _rlr.clone();
@@ -1109,6 +1109,9 @@ where
     window.set_app_paintable(true); // crucial for transparency
     window.set_resizable(true);
     window.set_decorated(false);
+
+    // Run with GDK_DEBUG=interactive cargo run ... instead
+    //
     // #[cfg(debug_assertions)]
     // gtk::Window::set_interactive_debugging(true);
 
@@ -1322,6 +1325,20 @@ fn add_actions(
 
     let about = gio::SimpleAction::new("about", None);
     about.connect_activate(glib::clone!(@weak window => move |_, _| {
+        let gen_comments = |with_markup: bool| {
+            format!("- Quit with {ms}q{me} or {ms}{lt}{primary}{gt}Q{me}.
+- Click to drag.
+- Press {ms}s{me} or {ms}F2{me} to open the Settings window.
+- Press {ms}r{me} to rotate 90 degrees. Press {ms}{lt}Shift{gt}r{me} to flip (mirror) the marks without rotation.
+- Press {ms}p{me} to toggle protractor mode.
+- Press {ms}f{me} or {ms}{lt}Space{gt}{me} to toggle freezing the measurements.
+- Press {ms}{primary}{me} and drag the angle base side to rotate it in protractor mode.
+- Press {ms}{primary}{me} continuously to disable precision (measurements will snap to nearest integer).
+- Press {ms}+{me} to increase size. Press {ms}-{me} to decrease size.
+- Press {ms}{lt}{primary}{gt}+{me}, {ms}{lt}{primary}{gt}+{me} to increase font size. Press {ms}{lt}{primary}{gt}-{me}, {ms}{lt}{primary}{gt}{me} to decrease font size.
+- Press {ms}Up{me}, {ms}Down{me}, {ms}Left{me}, {ms}Right{me} to move window position by 10 pixels. Also hold down {ms}{primary}{me} to move by 1 pixel.
+", ms =if with_markup { "<tt>" } else { "`" }, me = if with_markup { "</tt>"} else {"`"}, lt = if with_markup { "&lt;" } else {"<"}, gt = if with_markup { "&gt;" } else { ">" }, primary = if cfg!(target_os = "macos") { "⌘" } else {"Control_L"})
+        };
         let p = AboutDialog::new();
         p.set_program_name("rlr");
         p.set_logo(Some(&gtk::gdk_pixbuf::Pixbuf::from_xpm_data(
@@ -1329,22 +1346,31 @@ fn add_actions(
         ).unwrap()));
         p.set_website_label(Some("https://github.com/epilys/rlr"));
         p.set_website(Some("https://github.com/epilys/rlr"));
-        p.set_authors(&["Manos Pitsidianakis"]);
+        p.set_authors(&["Manos Pitsidianakis <manos@pitsidianak.is>"]);
         p.set_copyright(Some("2021 - Manos Pitsidianakis"));
         p.set_title("About rlr");
         p.set_license_type(gtk::License::Gpl30);
         p.set_transient_for(Some(&window));
-        p.set_comments(Some("- Quit with `q` or `Ctrl-Q`.
-- Click to drag.
-- Press `r` to rotate 90 degrees. Press `<Shift>r` to flip (mirror) the marks without rotation.
-- Press `p` to toggle protractor mode.
-- Press `f` or `<Space>` to toggle freezing the measurements.
-- Press `Control_L` and drag the angle base side to rotate it in protractor mode.
-- Press `Control_L` continuously to disable precision (measurements will snap to nearest integer).
-- Press `+` to increase size.
-- Press `-` to decrease size.
-- Press `Up`, `Down`, `Left`, `Right` to move window position by 10 pixels. Also hold down `Control_L` to move by 1 pixel.
-"));
+        p.set_comments(Some(&gen_comments(false)));
+        // Access comments label widget through this monstrosity because AboutDialog does not
+        // provide us with a clean interface to access the content widgets semantically.
+        if let Some(comments_widget) = p.content_area().children().first().and_then(|w| w.clone().downcast::<gtk::Container>().ok()).and_then(|c| c.children().get(2).cloned()).and_then(|w| w.downcast::<gtk::Container>().ok()).and_then(|c| c.children().first().cloned()).and_then(|w| w.downcast::<gtk::Container>().ok()).and_then(|c| c.children().get(1).cloned()) {
+            if let Ok(comments_label) = comments_widget.downcast::<gtk::Label>() {
+                if comments_label.text().starts_with("- Quit") {
+                    comments_label.set_text(&gen_comments(true));
+                    comments_label.set_use_markup(true);
+                    comments_label.set_justify(gtk::Justification::Left);
+                }
+            }
+        }
+        p.connect_response(
+            glib::clone!(@weak window => move |self_, response: gtk::ResponseType| {
+                match response {
+                    gtk::ResponseType::Close | gtk::ResponseType::DeleteEvent => self_.emit_close(),
+                    _ => {},
+            }
+            }),
+        );
         p.show_all();
     }));
     let settings = gio::SimpleAction::new("settings", None);
