@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### Added
+
+- [**`aa57bf4e`**](https://github.com/epilys/rlr/commit/aa57bf4eef4695af2ac4757e51eb9bca352a49ba) `Add font-size-factor setting to scale text size`
+- [**`96d0353a`**](https://github.com/epilys/rlr/commit/96d0353a1ed8afa108e508b76fbd84620c305eca) `Add Settings dialog`
+- [**`7e8f22cd`**](https://github.com/epilys/rlr/commit/7e8f22cd84d064fbc6b5d8c1f1deb6a0d40f9e68) `Add font-name setting`
+- [**`3b6f8420`**](https://github.com/epilys/rlr/commit/3b6f842051c50c745967225acbbe16654380c145) `Add option to install GSettings schema if missing`
+- [**`98bdfbad`**](https://github.com/epilys/rlr/commit/98bdfbad72884176d8b56fb67a77402083be395e) `Add right click app context menu`
+
+### Bug Fixes
+
+- [**`16b92484`**](https://github.com/epilys/rlr/commit/16b924844bc4966bf6bd6f58a86a9c563870d4e2) `Fix position being updated on motion signal even when frozen`
+
+### Changes
+
+- [**`b5ff9f0c`**](https://github.com/epilys/rlr/commit/b5ff9f0cd6ec6b3f01f6a01113e681ad4dcdb3e0) `Update help text in About window`
+
+### Refactoring
+
+- [**`fab3f14d`**](https://github.com/epilys/rlr/commit/fab3f14dc37bc3a4a4c4a75542d47d436ca1cc70) `Refactor to use glib::clone more`
+
+### Miscellaneous Tasks
+
+- [**`78d8bf91`**](https://github.com/epilys/rlr/commit/78d8bf91252be1f2535a5e9ec08964b12471dc89) `Improve font size based on monitor PPI and scale_factor`
+- [**`30184fa5`**](https://github.com/epilys/rlr/commit/30184fa52146a857d40ec011e12324351cf0a1b7) `Sync back settings when changing them on runtime`
+
 ## [0.2.0] - 2024-11-24
 
 ### Added
