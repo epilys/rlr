@@ -1838,6 +1838,7 @@ fn show_about_window(window: &gtk::ApplicationWindow) {
         format!(
             "{bs}Quit{be} with {ms}q{me} or {ms}{lt}{primary}{gt}Q{me}.
 Click to {bs}drag{be}.
+Press {ms}?{me} or {ms}F1{me} to {bs}open the About and Help window{be}.
 Press {ms}s{me} or {ms}F2{me} to {bs}open the Settings window{be}.
 Press {ms}r{me} to {bs}rotate{be} 90 degrees. Press {ms}{lt}Shift{gt}r{me} to {bs}flip \
              (mirror){be} the marks without rotation.
