@@ -7,7 +7,7 @@
 Rust + GTK interactive pixel screen ruler with protractor mode.
 
 ```shell
-cargo install rlr
+cargo install rlr-gtk
 ```
 
 ## Demo
