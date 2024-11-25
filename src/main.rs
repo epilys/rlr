@@ -1077,6 +1077,9 @@ where
             let rlr = _rlr.clone();
             {
                 let mut lck = rlr.lock().unwrap();
+                if lck.freeze {
+                    return glib::Propagation::Proceed;
+                }
                 lck.position = motion.position();
                 if lck.edit_angle_offset {
                     let (xr, yr) = lck.position;
