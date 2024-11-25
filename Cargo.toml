@@ -1,6 +1,6 @@
 [package]
 name = "rlr-gtk"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Manos Pitsidianakis <manos@pitsidianak.is>"]
 edition = "2021"
 license = "GPL-3.0-or-later"
@@ -8,7 +8,7 @@ description = "pixel screen ruler"
 repository = "https://github.com/epilys/rlr"
 homepage = "https://github.com/epilys/rlr"
 categories = ["graphics"]
-keywords = ["pixel", "pixels",  "display", "ruler", "screen"]
+keywords = ["pixel", "pixels", "display", "ruler", "screen"]
 rust-version = "1.70.0"
 
 [dependencies]
