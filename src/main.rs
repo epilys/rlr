@@ -424,20 +424,21 @@ impl Settings {
     }
 
     fn set_window(rlr: Rc<Mutex<Rlr>>, window: gtk::ApplicationWindow) {
-        let rlr2 = rlr.clone();
         let mut lck = rlr.lock().unwrap();
         lck.settings.window = Some(window.clone());
         lck.settings.changed_signal_id = lck.settings.obj.as_ref().map(|obj| {
-            obj.connect_changed(None, move |_self: &gio::Settings, key: &str| {
-                let rlr = rlr2.clone();
-                let mut lck = rlr.lock().unwrap();
-                lck.settings.sync_read();
-                if key == Self::WINDOW_OPACITY {
-                    window.set_opacity(lck.settings.window_opacity);
-                }
-                drop(lck);
-                window.queue_draw();
-            })
+            obj.connect_changed(
+                None,
+                glib::clone!(@strong rlr => move |_self: &gio::Settings, key: &str| {
+                    let mut lck = rlr.lock().unwrap();
+                    lck.settings.sync_read();
+                    if key == Self::WINDOW_OPACITY {
+                        window.set_opacity(lck.settings.window_opacity);
+                    }
+                    drop(lck);
+                    window.queue_draw();
+                }),
+            )
         });
     }
 }
@@ -1072,7 +1073,6 @@ where
 
     window.connect_button_press_event(glib::clone!(@strong rlr, @strong menu =>
     move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventButton| {
-        let rlr = rlr.clone();
         let mut lck = rlr.lock().unwrap();
 
         if matches!(ev.event_type(), gtk::gdk::EventType::ButtonPress)
@@ -1107,22 +1107,18 @@ where
         }
         glib::Propagation::Proceed
     }));
-    let _rlr = rlr.clone();
     window.connect_button_release_event(
-        move |_application: &gtk::ApplicationWindow,
-              ev: &gtk::gdk::EventButton|
-              -> glib::Propagation {
-            let rlr = _rlr.clone();
-            // g_printerr!("drag end\n");
-            if ev.button() == 1 {
-                rlr.lock().unwrap().edit_angle_offset = false;
+        glib::clone!(@strong rlr => move |_application: &gtk::ApplicationWindow, ev: &gtk::gdk::EventButton| {
+                // g_printerr!("drag end\n");
+                if ev.button() == 1 {
+                    rlr.lock().unwrap().edit_angle_offset = false;
+                }
+                glib::Propagation::Proceed
             }
-            glib::Propagation::Proceed
-        },
+        ),
     );
-    let _rlr = rlr.clone();
     window.connect_key_press_event(
-        move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| -> glib::Propagation {
+        glib::clone!(@strong rlr => move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| {
             // g_printerr!("press {}\n", ev.keyval().name().unwrap().as_str());
             if ev
                 .keyval()
@@ -1130,16 +1126,14 @@ where
                 .map(|n| n.as_str() == "Control_L" || n.as_str() == "Meta_L")
                 .unwrap_or(false)
             {
-                let rlr = _rlr.clone();
                 rlr.lock().unwrap().precision = false;
                 window.queue_draw();
             }
             glib::Propagation::Proceed
-        },
-    );
-    let _rlr = rlr.clone();
+        }
+    ));
     window.connect_key_release_event(
-        move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| -> glib::Propagation {
+        glib::clone!(@strong rlr => move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventKey| {
             // g_printerr!("release {}\n", ev.keyval().name().unwrap().as_str());
             if ev
                 .keyval()
@@ -1147,17 +1141,14 @@ where
                 .map(|n| n.as_str() == "Control_L" || n.as_str() == "Meta_L")
                 .unwrap_or(false)
             {
-                let rlr = _rlr.clone();
                 rlr.lock().unwrap().precision = true;
                 window.queue_draw();
             }
             glib::Propagation::Proceed
-        },
-    );
-    let _rlr = rlr.clone();
+        }
+    ));
     window.connect_motion_notify_event(
-        move |window: &gtk::ApplicationWindow, motion: &gdk::EventMotion| -> glib::Propagation {
-            let rlr = _rlr.clone();
+        glib::clone!(@strong rlr => move |window: &gtk::ApplicationWindow, motion: &gdk::EventMotion| {
             {
                 let mut lck = rlr.lock().unwrap();
                 if lck.freeze {
@@ -1176,12 +1167,10 @@ where
             }
             window.queue_draw();
             glib::Propagation::Proceed
-        },
-    );
-    let _rlr = rlr.clone();
+        }
+    ));
     window.connect_configure_event(
-        move |window: &gtk::ApplicationWindow, event: &gdk::EventConfigure| -> bool {
-            let rlr = _rlr.clone();
+        glib::clone!(@strong rlr => move |window: &gtk::ApplicationWindow, event: &gdk::EventConfigure| {
             {
                 let mut lck = rlr.lock().unwrap();
                 lck.width = event.size().0.try_into().unwrap_or(i32::MAX);
@@ -1190,8 +1179,8 @@ where
             window.queue_draw();
 
             false
-        },
-    );
+        }
+    ));
     window.set_app_paintable(true); // crucial for transparency
     window.set_resizable(true);
     window.set_decorated(false);
@@ -1211,8 +1200,6 @@ where
 
     window.add(&drawing_area);
     window.set_opacity(rlr.lock().unwrap().settings.window_opacity);
-
-    build_system_menu(application);
 
     add_actions(application, &window, rlr.clone());
 
@@ -1288,35 +1275,6 @@ fn set_visual(window: &gtk::ApplicationWindow, _screen: Option<&gtk::gdk::Screen
     }
 }
 
-const fn build_system_menu(_application: &gtk::Application) {
-    //let menu = gio::Menu::new();
-    //let menu_bar = gio::Menu::new();
-    //let more_menu = gio::Menu::new();
-    //let switch_menu = gio::Menu::new();
-    //let settings_menu = gio::Menu::new();
-    //let submenu = gio::Menu::new();
-
-    //// The first argument is the label of the menu item whereas the second is
-    //// the action name. It'll makes more sense when you'll be reading the
-    //// "add_actions" function.
-    //menu.append(Some("Quit"), Some("app.quit"));
-
-    //switch_menu.append(Some("Switch"), Some("app.switch"));
-    //menu_bar.append_submenu(Some("_Switch"), &switch_menu);
-
-    //settings_menu.append(Some("Sub another"), Some("app.sub_another"));
-    //submenu.append(Some("Sub sub another"), Some("app.sub_sub_another"));
-    //submenu.append(Some("Sub sub another2"), Some("app.sub_sub_another2"));
-    //settings_menu.append_submenu(Some("Sub menu"), &submenu);
-    //menu_bar.append_submenu(Some("_Another"), &settings_menu);
-
-    //more_menu.append(Some("About"), Some("app.about"));
-    //menu_bar.append_submenu(Some("?"), &more_menu);
-
-    //application.set_app_menu(Some(&menu));
-    //application.set_menubar(Some(&menu_bar));
-}
-
 /// This function creates "actions" which connect on the declared actions from
 /// the menu items.
 fn add_actions(
@@ -1325,20 +1283,18 @@ fn add_actions(
     rlr: Rc<Mutex<Rlr>>,
 ) {
     let freeze = gio::SimpleAction::new("freeze", None);
-    let _rlr = rlr.clone();
-    freeze.connect_activate(glib::clone!(@weak window => move |_, _| {
+    freeze.connect_activate(glib::clone!(@strong rlr, @weak window => move |_, _| {
         {
-            let mut lck = _rlr.lock().unwrap();
+            let mut lck = rlr.lock().unwrap();
             lck.freeze = !lck.freeze;
         }
         window.queue_draw();
     }));
 
     let flip = gio::SimpleAction::new("flip", None);
-    let _rlr = rlr.clone();
-    flip.connect_activate(glib::clone!(@weak window => move |_, _| {
+    flip.connect_activate(glib::clone!(@strong rlr, @weak window => move |_, _| {
         {
-            let mut lck = _rlr.lock().unwrap();
+            let mut lck = rlr.lock().unwrap();
             if !lck.protractor {
                 let _ = lck.rotate.next();
                 let _ = lck.rotate.next();
@@ -1348,10 +1304,9 @@ fn add_actions(
     }));
 
     let rotate = gio::SimpleAction::new("rotate", None);
-    let _rlr = rlr.clone();
-    rotate.connect_activate(glib::clone!(@weak window => move |_, _| {
+    rotate.connect_activate(glib::clone!(@strong rlr, @weak window => move |_, _| {
         {
-            let mut lck = _rlr.lock().unwrap();
+            let mut lck = rlr.lock().unwrap();
             if !lck.protractor {
                 let tmp = lck.width;
                 lck.width = lck.height;
@@ -1384,11 +1339,10 @@ fn add_actions(
         window.queue_draw();
     }));
 
-    let _rlr = rlr.clone();
     let protractor = gio::SimpleAction::new("protractor", None);
-    protractor.connect_activate(glib::clone!(@weak window => move |_, _| {
+    protractor.connect_activate(glib::clone!(@strong rlr, @weak window => move |_, _| {
         {
-            let mut lck = _rlr.lock().unwrap();
+            let mut lck = rlr.lock().unwrap();
             lck.protractor = !lck.protractor;
             if let Some((w, h)) = lck.p_dimens.take() {
                 lck.p_dimens = Some((lck.width,lck.height ));
@@ -1415,16 +1369,15 @@ fn add_actions(
     }));
     let settings = gio::SimpleAction::new("settings", None);
     settings.connect_activate(
-        glib::clone!(@weak application, @weak window, @strong rlr => move |_, _| {
+        glib::clone!(@strong rlr, @weak application, @weak window => move |_, _| {
             show_settings_window(&application, &window, rlr.clone());
         }),
     );
 
-    let _rlr = rlr.clone();
     let increase = gio::SimpleAction::new("increase", None);
-    increase.connect_activate(glib::clone!(@weak window => move |_, _| {
+    increase.connect_activate(glib::clone!(@strong rlr, @weak window => move |_, _| {
         {
-            let mut lck = _rlr.lock().unwrap();
+            let mut lck = rlr.lock().unwrap();
             if !lck.protractor {
                 if lck.rotate.is_rotated() {
                     lck.height += 50;
@@ -1439,11 +1392,10 @@ fn add_actions(
         }
         window.queue_draw();
     }));
-    let _rlr = rlr.clone();
     let decrease = gio::SimpleAction::new("decrease", None);
-    decrease.connect_activate(glib::clone!(@weak window => move |_, _| {
+    decrease.connect_activate(glib::clone!(@strong rlr, @weak window => move |_, _| {
         {
-            let mut lck = _rlr.lock().unwrap();
+            let mut lck = rlr.lock().unwrap();
             if !lck.protractor {
                 if lck.rotate.is_rotated() {
                     lck.height -= 50;
@@ -1461,32 +1413,28 @@ fn add_actions(
         }
         window.queue_draw();
     }));
-    let _rlr = rlr.clone();
     let increase_font_size = gio::SimpleAction::new("increase_font_size", None);
-    increase_font_size.connect_activate(glib::clone!(@weak window => move |_, _| {
+    increase_font_size.connect_activate(glib::clone!(@strong rlr, @weak window => move |_, _| {
         {
-            let mut lck = _rlr.lock().unwrap();
+            let mut lck = rlr.lock().unwrap();
             lck.settings.font_size_factor += 0.05;
             lck.settings.font_size_factor = lck.settings.font_size_factor.clamp(0.1, 10.0);
             lck.settings.sync_write();
         }
         window.queue_draw();
     }));
-    let _rlr = rlr.clone();
     let decrease_font_size = gio::SimpleAction::new("decrease_font_size", None);
-    decrease_font_size.connect_activate(glib::clone!(@weak window => move |_, _| {
+    decrease_font_size.connect_activate(glib::clone!(@strong rlr, @weak window => move |_, _| {
         {
-            let mut lck = _rlr.lock().unwrap();
+            let mut lck = rlr.lock().unwrap();
             lck.settings.font_size_factor -= 0.05;
             lck.settings.font_size_factor = lck.settings.font_size_factor.clamp(0.1, 10.0);
             lck.settings.sync_write();
         }
         window.queue_draw();
     }));
-    let _rlr = rlr.clone();
     let move_right = gio::SimpleAction::new("move_right", None);
-    move_right.connect_activate(glib::clone!(@weak window => move |_, _| {
-        let rlr = _rlr.clone();
+    move_right.connect_activate(glib::clone!(@strong rlr, @weak window => move |_, _| {
         let precision = rlr.lock().unwrap().precision;
         let (mut x, y) = window.position();
         if !precision {
@@ -1498,10 +1446,8 @@ fn add_actions(
         window.queue_draw();
     }));
 
-    let _rlr = rlr.clone();
     let move_left = gio::SimpleAction::new("move_left", None);
-    move_left.connect_activate(glib::clone!(@weak window => move |_, _| {
-        let rlr = _rlr.clone();
+    move_left.connect_activate(glib::clone!(@strong rlr, @weak window => move |_, _| {
         let precision = rlr.lock().unwrap().precision;
         let (mut x, y) = window.position();
         if !precision {
@@ -1513,10 +1459,8 @@ fn add_actions(
         window.queue_draw();
     }));
 
-    let _rlr = rlr.clone();
     let move_up = gio::SimpleAction::new("move_up", None);
-    move_up.connect_activate(glib::clone!(@weak window => move |_, _| {
-        let rlr = _rlr.clone();
+    move_up.connect_activate(glib::clone!(@strong rlr, @weak window => move |_, _| {
         let precision = rlr.lock().unwrap().precision;
         let (x, mut y) = window.position();
         if !precision {
@@ -1529,7 +1473,7 @@ fn add_actions(
     }));
 
     let move_down = gio::SimpleAction::new("move_down", None);
-    move_down.connect_activate(glib::clone!(@weak window => move |_, _| {
+    move_down.connect_activate(glib::clone!(@strong rlr, @weak window => move |_, _| {
         let precision = rlr.lock().unwrap().precision;
         let (x, mut y) = window.position();
         if !precision {
@@ -1571,7 +1515,9 @@ fn show_settings_window(
         secondary_color_chooser: gtk::ColorButton,
         font_button: gtk::FontButton,
         opacity_adj: gtk::Adjustment,
+        opacity_scale: gtk::Scale,
         font_size_adj: gtk::Adjustment,
+        font_size_scale: gtk::Scale,
         info_label: std::cell::RefCell<Option<gtk::Label>>,
         try_install_button: std::cell::RefCell<Option<gtk::Widget>>,
     }
@@ -1594,7 +1540,7 @@ fn show_settings_window(
         .type_(gtk::WindowType::Toplevel)
         .type_hint(gdk::WindowTypeHint::Dialog)
         .build();
-    let opacity_adj = gtk::Adjustment::new(0.0, 0.01, 1.0, 0.05, 0.1, 0.1);
+    let opacity_adj = gtk::Adjustment::new(0.0, 0.1, 1.1, 0.05, 0.1, 0.1);
     let font_size_adj = gtk::Adjustment::new(0.0, 0.1, 10.0, 0.05, 0.1, 0.1);
     let opacity_row = gtk::FlowBox::builder()
         .orientation(gtk::Orientation::Horizontal)
@@ -1606,17 +1552,15 @@ fn show_settings_window(
         .max_children_per_line(2)
         .build();
     opacity_row.insert(&gtk::Label::new(Some("Opacity")), 0);
-    opacity_row.insert(
-        &gtk::Scale::builder()
-            .can_focus(true)
-            .sensitive(true)
-            .visible(true)
-            .digits(3)
-            .adjustment(&opacity_adj)
-            .expand(true)
-            .build(),
-        1,
-    );
+    let opacity_scale = gtk::Scale::builder()
+        .can_focus(true)
+        .sensitive(true)
+        .visible(true)
+        .digits(3)
+        .adjustment(&opacity_adj)
+        .expand(true)
+        .build();
+    opacity_row.insert(&opacity_scale, 1);
     let font_size_row = gtk::FlowBox::builder()
         .orientation(gtk::Orientation::Horizontal)
         .can_focus(true)
@@ -1627,17 +1571,15 @@ fn show_settings_window(
         .max_children_per_line(2)
         .build();
     font_size_row.insert(&gtk::Label::new(Some("Font size factor")), 0);
-    font_size_row.insert(
-        &gtk::Scale::builder()
-            .can_focus(true)
-            .sensitive(true)
-            .visible(true)
-            .digits(3)
-            .adjustment(&font_size_adj)
-            .expand(true)
-            .build(),
-        1,
-    );
+    let font_size_scale = gtk::Scale::builder()
+        .can_focus(true)
+        .sensitive(true)
+        .visible(true)
+        .digits(3)
+        .adjustment(&font_size_adj)
+        .expand(true)
+        .build();
+    font_size_row.insert(&font_size_scale, 1);
     let primary_color_chooser = gtk::ColorButton::new();
     primary_color_chooser.set_expand(true);
     primary_color_chooser.set_use_alpha(true);
@@ -1656,13 +1598,25 @@ fn show_settings_window(
             ref secondary_color_chooser,
             ref font_button,
             ref opacity_adj,
+            ref opacity_scale,
             ref font_size_adj,
+            ref font_size_scale,
             ref info_label,
             ref try_install_button,
         } = settings_widgets;
         primary_color_chooser.set_rgba(&lck.settings.primary_color);
         secondary_color_chooser.set_rgba(&lck.settings.secondary_color);
         let is_gschema_installed = lck.settings.is_installed();
+        macro_rules! _set_sens {
+            ($($i:ident),*$(,)?) => {{ $($i.set_sensitive(is_gschema_installed);)* }};
+        }
+        _set_sens! {
+            primary_color_chooser,
+            secondary_color_chooser,
+            font_button,
+            opacity_scale,
+            font_size_scale,
+        };
         if let Some(gsettings_obj) = lck.settings.obj.as_ref() {
             font_button.set_font(lck.settings.font_name());
             if let Ok(r) = info_label.try_borrow() {
@@ -1720,7 +1674,9 @@ fn show_settings_window(
         secondary_color_chooser,
         font_button,
         opacity_adj,
+        opacity_scale,
         font_size_adj,
+        font_size_scale,
         info_label: std::cell::RefCell::new(None),
         try_install_button: std::cell::RefCell::new(None),
     });
@@ -1808,6 +1764,7 @@ fn show_settings_window(
                     ..Settings::default()
                 };
                 lck.settings.sync_write();
+                window.set_opacity(lck.settings.window_opacity);
                 drop(lck);
                 window.queue_draw();
             }
