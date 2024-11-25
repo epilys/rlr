@@ -1066,44 +1066,47 @@ where
     window.connect_enter_notify_event(enter_notify);
     window.connect_leave_notify_event(leave_notify);
 
-    let _rlr = rlr.clone();
-    window.connect_button_press_event(
-        move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventButton| -> glib::Propagation {
-            let rlr = _rlr.clone();
-            let mut lck = rlr.lock().unwrap();
+    let accel_group = gtk::AccelGroup::new();
+    window.add_accel_group(&accel_group);
+    let menu = make_context_menu(&window, &accel_group);
 
-            if ev.event_type() == gtk::gdk::EventType::ButtonPress && lck.interval.is_start() {
-                if let Interval::Start(start_pos) = lck.interval {
-                    lck.interval = Interval::Full(
-                        start_pos,
-                        if lck.rotate.is_rotated() {
-                            ev.position().1
-                        } else {
-                            ev.position().0
-                        },
-                    );
-                }
-            } else if ev.event_type() == gtk::gdk::EventType::DoubleButtonPress {
-                lck.interval = if lck.rotate.is_rotated() {
-                    Interval::Start(ev.position().1)
-                } else {
-                    Interval::Start(ev.position().0)
-                };
-            } else if ev.button() == 1 && !lck.precision {
-                lck.edit_angle_offset = true;
-                drop(lck);
-            } else if ev.button() == 1 {
-                #[allow(clippy::cast_possible_wrap)]
-                window.begin_move_drag(
-                    ev.button() as i32,
-                    ev.root().0 as i32,
-                    ev.root().1 as i32,
-                    ev.time(),
+    window.connect_button_press_event(glib::clone!(@strong rlr, @strong menu =>
+    move |window: &gtk::ApplicationWindow, ev: &gtk::gdk::EventButton| {
+        let rlr = rlr.clone();
+        let mut lck = rlr.lock().unwrap();
+
+        if matches!(ev.event_type(), gtk::gdk::EventType::ButtonPress)
+            && lck.interval.is_start()
+        {
+            if let Interval::Start(start_pos) = lck.interval {
+                lck.interval = Interval::Full(
+                    start_pos,
+                    if lck.rotate.is_rotated() {
+                        ev.position().1
+                    } else {
+                        ev.position().0
+                    },
                 );
             }
-            glib::Propagation::Proceed
-        },
-    );
+        } else if matches!(ev.event_type(), gtk::gdk::EventType::DoubleButtonPress) {
+            lck.interval = if lck.rotate.is_rotated() {
+                Interval::Start(ev.position().1)
+            } else {
+                Interval::Start(ev.position().0)
+            };
+        } else if ev.button() == 1 && !lck.precision {
+            lck.edit_angle_offset = true;
+            drop(lck);
+        } else if ev.button() == 1 {
+            #[allow(clippy::cast_possible_wrap)]
+            window.begin_move_drag(1, ev.root().0 as i32, ev.root().1 as i32, ev.time());
+        } else if ev.button() == 3
+            && matches!(ev.event_type(), gtk::gdk::EventType::ButtonPress)
+        {
+            menu.popup_at_pointer(Some(ev));
+        }
+        glib::Propagation::Proceed
+    }));
     let _rlr = rlr.clone();
     window.connect_button_release_event(
         move |_application: &gtk::ApplicationWindow,
@@ -1947,4 +1950,62 @@ Press {ms}Up{me}, {ms}Down{me}, {ms}Left{me}, {ms}Right{me} to {bs}move window p
         }),
     );
     p.show_all();
+}
+
+fn make_context_menu(window: &gtk::ApplicationWindow, accel_group: &gtk::AccelGroup) -> gtk::Menu {
+    let mut menu = gtk::Menu::builder()
+        .attach_widget(window)
+        .accel_group(accel_group)
+        .visible(true)
+        .expand(true);
+    macro_rules! add_child {
+        ($(($label:literal, $action:literal)),*$(,)?) => {{
+            $(menu = menu
+                .child(
+                    &{
+                        let i = gtk::MenuItem::builder()
+                            .label($label)
+                            .action_name($action)
+                            .visible(true)
+                            .expand(true)
+                            .build();
+                        if let Some(accel_s) = window.application().and_then(|app| app.accels_for_action($action).get(0).cloned()) {
+                            let (key, modifier) = gtk::accelerator_parse(&accel_s);
+
+                            if let Some(al) = i.child().and_then(|c| c.downcast::<gtk::AccelLabel>().ok()) {
+                                al.set_accel(key, modifier);
+                            }
+                        }
+                        i
+                    }
+                );)*
+        }};
+        (@sep) => {{
+            menu = menu.child(&gtk::SeparatorMenuItem::builder().visible(true).build());
+        }};
+    }
+    add_child! {
+        ("Rotate", "app.rotate"),
+        ("Flip", "app.flip"),
+        ("Toggle protractor", "app.protractor"),
+        ("Toggle freeze", "app.freeze"),
+        ("Increase size", "app.increase"),
+        ("Decrease size", "app.decrease"),
+        ("Increase font size", "app.increase_font_size"),
+        ("Decrease font size", "app.decrease_font_size"),
+    }
+    add_child! {
+        @sep
+    };
+    add_child! {
+        ("Settings", "app.settings"),
+        ("About", "app.about"),
+    };
+    add_child! {
+        @sep
+    };
+    add_child! {
+        ("Quit", "app.quit"),
+    };
+    menu.build()
 }
