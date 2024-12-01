@@ -14,6 +14,9 @@ rust-version = "1.70.0"
 [dependencies]
 gtk = { version = "0.18", features = ["v3_24"] }
 
+[build-dependencies]
+glib-build-tools = { version = "0.18" }
+
 [[bin]]
 name = "rlr"
 path = "src/main.rs"

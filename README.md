@@ -10,6 +10,8 @@ Rust + GTK interactive pixel screen ruler with protractor mode.
 cargo install rlr-gtk
 ```
 
+Alternatively, a flatpak manifest file is included so that you can build and install as a flatpak bundle.
+
 ## Demo
 
 <table>
@@ -73,18 +75,30 @@ If you are on macOS, use <kbd>⌘</kbd> (Command) key instead of <kbd>Ctrl</kbd>
 cargo build --release
 ```
 
+Build as flatpak and install:
+
+```shell
+flatpak-builder --install repo com.github.epilys.rlr.json --force-clean --user -y
+```
+
+Afterwards you can run from your desktop's application menu (under category "Graphics") or from the terminal with:
+
+```shell
+flatpak run com.github.epilys.rlr
+```
+
 ## Packaging
 
 To help packagers in OSes that support the XDG Desktop standards, a `.desktop`
 app launcher filer, an application icon and a symbolic application icon are
 included.
 
-- `rlr.desktop` should be installed in any of the following:
+- `data/com.github.epilys.rlr.desktop` should be installed in any of the following:
   `/usr/share/applications/`, `/usr/local/share/applications/` or
   `$HOME/.local/share/applications/`.
-- `rlr.svg` should be installed in
-  `/usr/share/icons/hicolor/scalable/apps/rlr.svg`.
-- `rlr.symbolic.svg` should be installed in
-  `/usr/share/icons/hicolor/symbolic/apps/rlr.svg`.
+- `data/com.github.epilys.rlr.svg` should be installed in
+  `/usr/share/icons/hicolor/scalable/apps/com.github.epilys.rlr.svg`.
+- `data/com.github.epilys.rlr.symbolic.svg` should be installed in
+  `/usr/share/icons/hicolor/symbolic/apps/com.github.epilys.rlr.svg`.
 
 The files have been contributed by <https://github.com/somepaulo>.

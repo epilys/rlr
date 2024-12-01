@@ -1,0 +1,6 @@
+<gresources>
+  <gresource prefix="/images">
+        <file>com.github.epilys.rlr.png</file>
+        <file>com.github.epilys.rlr.svg</file>
+    </gresource>
+</gresources>

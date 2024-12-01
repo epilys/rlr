@@ -108,7 +108,7 @@ impl CairoContextExt for Context {
 const GSCHEMA_XML: &'static str =
     include_str!("../data/com.github.epilys.rlr.Settings.gschema.xml");
 
-include!("logo.xpm.rs");
+// include!("logo.xpm.rs");
 
 /// Encode rotation state/angles around the starting left side as the origin
 /// point.
@@ -990,6 +990,8 @@ fn run_app() -> Option<i32> {
 }
 
 fn main() {
+    gio::resources_register_include!("compiled.gresource").unwrap();
+
     if let Some(exit_code) = run_app() {
         std::process::exit(exit_code);
     }
@@ -1003,7 +1005,9 @@ where
         .application(application)
         .events(gdk::EventMask::POINTER_MOTION_MASK)
         .build();
-    window.set_icon(Some(&gtk::gdk_pixbuf::Pixbuf::from_xpm_data(ICON).unwrap()));
+    window.set_icon(Some(
+        &gtk::gdk_pixbuf::Pixbuf::from_resource(&format!("/images/{}.svg", APP_ID)).unwrap(),
+    ));
 
     set_visual(&window, None);
 
@@ -1185,7 +1189,7 @@ where
     window.set_resizable(true);
     window.set_decorated(false);
 
-    // Run with GDK_DEBUG=interactive cargo run ... instead
+    // Run with GTK_DEBUG=interactive cargo run ... instead
     //
     // #[cfg(debug_assertions)]
     // gtk::Window::set_interactive_debugging(true);
@@ -1868,7 +1872,9 @@ Press {ms}Up{me}, {ms}Down{me}, {ms}Left{me}, {ms}Right{me} to {bs}move window p
     };
     let p = AboutDialog::new();
     p.set_program_name("rlr");
-    p.set_logo(Some(&gtk::gdk_pixbuf::Pixbuf::from_xpm_data(ICON).unwrap()));
+    p.set_logo(Some(
+        &gtk::gdk_pixbuf::Pixbuf::from_resource(&format!("/images/{}.svg", APP_ID)).unwrap(),
+    ));
     p.set_website_label(Some("https://github.com/epilys/rlr"));
     p.set_website(Some("https://github.com/epilys/rlr"));
     p.set_authors(&["Manos Pitsidianakis <manos@pitsidianak.is>"]);
