@@ -519,7 +519,7 @@ dependencies = [
 
 [[package]]
 name = "rlr-gtk"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "glib-build-tools",
  "gtk",

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.3.2] - 2025-09-16
+
+### Bug Fixes
+
+- [**`7bed0f3`**](https://github.com/epilys/rlr/commit/7bed0f3830f3506fadb5358bb36a4f8cb4da44e6) Remove .xpm image resources, unsupported by gdb-pixbuf
+
 ## [0.3.1] - 2024-11-25
 
 ### Documentation
@@ -76,3 +82,4 @@ All notable changes to this project will be documented in this file.
 [0.2.0]: <https://github.com/epilys/rlr/releases/tag/v0.2.0>
 [0.3.0]: <https://github.com/epilys/rlr/releases/tag/v0.3.0>
 [0.3.1]: <https://github.com/epilys/rlr/releases/tag/v0.3.1>
+[0.3.2]: <https://github.com/epilys/rlr/releases/tag/v0.3.2>
